@@ -1,11 +1,7 @@
-body {
-    background-color: #f6f6f6;
-}
-
 .header {
     background-color: var(--branco-puro);
     display: flex;
-    border-bottom: 1px solid var(--preto-puro);
+    border-bottom: 1px solid var(--bordo);
     padding: 1em 2em;
     align-items: center;
     justify-content: space-between;

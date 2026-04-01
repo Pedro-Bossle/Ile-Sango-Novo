@@ -1,16 +1,28 @@
 .footer {
-    border-top: 1px solid var(--preto-puro);
+    border-top: 1px solid var(--bordo);
     background-color: var(--marrom);
     color: var(--branco-puro);
     display: flex;
     flex-direction: column;
-    padding: 1em 2em;
+    padding: 3em 4em;
+    font-weight: 200;
+    color: #DEDAD3;
+}
+
+.footer h3 {
+    color: var(--bege);
+}
+
+.icon {
+    width: 25px;
+    margin-right: 0.5em;
 }
 
 .footer-container {
     display: flex;
     justify-content: space-between;
 }
+
 
 .footer-message {
     display: flex;
@@ -42,16 +54,95 @@
     font-family: var(--fonte-secundaria);
 }
 
-.footer-text{
+.footer-text {
+    display: flex;
+    flex-wrap: wrap;
     font-style: italic;
     font-weight: 200;
+    text-align: left;
 }
 
-.footer__copyright{
+.ul-social {
+    display: flex;
+    justify-content: center;
+    gap: 1em;
+}
+
+.footer-social_link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: var(--branco-puro);
+    font-weight: 600;
+}
+
+.footer-contacts {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+}
+
+.footer-contacts ul {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1.5em 0;
+}
+
+.footer-list_item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: left;
+    text-decoration: none;
+    color: var(--branco-puro);
+}
+
+.footer-activity {
     text-align: center;
 }
+
+.footer-activity ul {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+}
+
+.apointment-warn {
+    font-size: 13px;
+    font-style: italic;
+}
+
+.footer__copyright {
+    text-align: center;
+    font-weight: 100;
+    color: var(--branco-puro);
+}
+
+.ul-copyright {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1em;
+}
+
+.ul-copyright a {
+    text-decoration: none;
+    font-weight: 100;
+    margin: 1em;
+    color: var(--branco-puro);
+}
+
+
+.footer a:hover {
+    color: var(--bege);
+    transition: color 0.3s ease;
+}
+
 /*
 footer
+icon
     footer-container
         footer-message
             footer-logo

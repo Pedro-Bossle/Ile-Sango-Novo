@@ -9,12 +9,13 @@
   --amarelo-bordo-degrade: linear-gradient(90deg, #89570D 0%, #603a17 50%, #2E140C 100%);
   --bordo: #530526;
   --amarelo-dourado: #c57c1d;
-  --cinza-bege: #D6CFB4;
-  --branco-visivel: #f6f6f6;
+  --bege: #ECCF79;
+  --branco-visivel: #EDE9E4;
   --branco-puro: #ffffff;
   --preto-puro: #000000;
   --cinza: #919191;
-  --marrom: #b39c79;
+  --cinza-fonte: #7C736A;
+  --marrom: #5C4523;
   /*Fontes*/
   --fonte-principal: "Poppins";
   --fonte-secundaria: "Ancizar Serif";
@@ -25,9 +26,13 @@
 body {
   margin: 0;
   font-family: var(--fonte-principal);
+  color: var(--cinza-fonte);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--branco-visivel);
+
 }
+
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',

@@ -15,7 +15,7 @@ const Header = () => {
                 <a className="header-menu" href='https://youtube.com'>Calendário</a>
                 <a className="header-menu" href='https://youtube.com'>Catálogo</a>
                 <a className="header-menu" href='https://youtube.com'>Contato</a>
-                <a className="header-menu login-button" href='https://youtube.com'><img className='button_icon' src="/images/user-icon.png" alt=''/> Área Restrita</a>
+                <a className="header-menu login-button" href='https://youtube.com'><img className='button_icon' src="/images/icons/user-icon.png" alt=''/> Área Restrita</a>
             </nav>
         </div>
     )
