@@ -13,7 +13,6 @@ const Footer = () => {
                             <p className="footer-sub_title" >Tiago de Sàngó Aganjù e Rosangela de Oṣun Pandá</p>
                         </div>
                     </div>
-                    {/*Trocar os icones pra cor #ECCF79*/}
                     <p className="footer-text">Um espaço sagrado dedicado ao crescimento espiritual, cura e orientação.<br></br> Há mais de 4 anos servindo nossa comunidade com amor e dedicação.
                     </p>
                     <ul className="ul-social">
@@ -32,7 +31,7 @@ const Footer = () => {
                 <div className="footer-activity">
                     <h3 className="footer-section-title" >Atendimentos</h3>
                     <ul>
-                        <p className="footer-list_item" ><img className="icon" src="/images/icons/ico relogio.png" alt="clock icon"></img>10:00 às 20:00</p>
+                        <p className="footer-list_item" ><img className="icon" src="/images/icons/ico relogio.svg" alt="clock icon"></img>10:00 às 20:00</p>
                         <p className="footer-list_item apointment-warn" >Atendimentos somente com horário marcado</p>
 
                     </ul>

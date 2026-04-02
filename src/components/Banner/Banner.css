@@ -1,0 +1,56 @@
+.banner {
+    position: relative;
+    background-image: url("../../assets/xango_e_oxum_banner.png");
+    background-repeat: no-repeat;
+    background-size: cover;
+    height: 55vh;
+    overflow: hidden;
+    border-bottom: 2px solid var(--bordo);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1em 0;
+}
+
+.banner_titulo_container {
+    color: var(--branco-puro);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.banner_titulo {
+    font-family: var(--fonte-secundaria);
+    font-size: 2em;
+    margin: 0;
+}
+
+.banner_subtitulo {
+    font-family: var(--fonte-primaria);
+    font-weight: 400;
+    font-style: italic;
+}
+
+.banner_box_container {
+    margin: 1em 0 -2em 0;
+    display: flex;
+    gap: 2em;
+}
+
+.banner_box {
+    background: rgba(133, 126, 126, 0.295);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 8px;
+    padding: 1em;
+    color: var(--branco-puro);
+}
+
+.banner_box:hover {
+    transition: color 0.3s ease;
+    transform: scale(1.05);
+    transition: transform 0.3s ease;
+}
