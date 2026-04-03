@@ -53,6 +53,8 @@
     text-decoration: none;
     color: var(--bordo);
     font-weight: 400;
+    transition: transform 0.3s ease;
+
 }
 
 .login-button {

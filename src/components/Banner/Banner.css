@@ -47,6 +47,7 @@
     border-radius: 8px;
     padding: 1em;
     color: var(--branco-puro);
+    transition: transform 0.3s ease;
 }
 
 .banner_box:hover {
