@@ -15,10 +15,9 @@
     border-radius: 8px;
     margin: 1em;
     padding: 1em 2em;
-    min-height: 300px;
+    min-height: 270px;
     display: flex;
     flex-direction: column;
-    justify-content: space-between;
     transition: box-shadow 0.55s ease;
 }
 
@@ -49,6 +48,24 @@
 
 .evento-card-name {
     color: var(--preto-puro);
+}
+
+.evento-showmore {
+    padding: 1em;
+    border-radius: 8px;
+    border: 1px solid var(--cinza);
+    font-size: 1rem;
+    color: var(--cinza-fonte);
+    font-style: italic;
+    background-color: var(--branco-puro);
+    transition: transform 0.3s ease;
+}
+
+.evento-showmore:hover {
+    color: var(--bordo);
+    transition: color 0.3s ease;
+    transform: scale(1.01);
+    transition: transform 0.3s ease;
 }
 
 
