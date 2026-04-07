@@ -7,7 +7,7 @@ const MESES = [
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
 ];
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 3;
 
 function formatDataBR(value) {
     if (value == null || value === '') return '';
