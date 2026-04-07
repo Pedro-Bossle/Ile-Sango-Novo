@@ -15,6 +15,18 @@
     border-radius: 8px;
     margin: 1em;
     padding: 1em 2em;
+    min-height: 300px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    transition: box-shadow 0.55s ease;
+}
+
+.evento-card:hover {
+    border: 1px solid var(--amarelo-dourado);
+    box-shadow:
+        0 8px 32px rgba(110, 77, 6, 0.342),
+        0 2px 12px rgba(0, 0, 0, 0.137);
 }
 
 .evento-card-name-container {
