@@ -70,8 +70,8 @@ export default function Eventos() {
                                 <p className='evento-card-data'>{formatDataBR(e.data)}</p>
                             </div>
                             <p className='evento-card-descricao'>{e.descricao}</p>
-                            <p className='evento-card-local'><img className='evento-card-ico' src='./images/icons/ico location.png'></img>{e.local}</p>
-                            <p className='evento-card-hora'><img className='evento-card-ico' src='./images/icons/ico relogio.svg'></img>{formatHora(e.hora)}</p>
+                            <p className='evento-card-local'><img className='evento-card-ico' src='./images/icons/ico location.png' alt="" />{e.local}</p>
+                            <p className='evento-card-hora'><img className='evento-card-ico' src='./images/icons/ico relogio.svg' alt="" />{formatHora(e.hora)}</p>
                         </div>
                     </article>
                 ))}

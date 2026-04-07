@@ -1,14 +1,14 @@
 {
   "files": {
     "main.css": "/static/css/main.a564358d.css",
-    "main.js": "/static/js/main.b3441f3d.js",
+    "main.js": "/static/js/main.3aa116b2.js",
     "static/media/xango_e_oxum_banner.png": "/static/media/xango_e_oxum_banner.a99211ac362941c7281d.png",
     "index.html": "/index.html",
     "main.a564358d.css.map": "/static/css/main.a564358d.css.map",
-    "main.b3441f3d.js.map": "/static/js/main.b3441f3d.js.map"
+    "main.3aa116b2.js.map": "/static/js/main.3aa116b2.js.map"
   },
   "entrypoints": [
     "static/css/main.a564358d.css",
-    "static/js/main.b3441f3d.js"
+    "static/js/main.3aa116b2.js"
   ]
 }
