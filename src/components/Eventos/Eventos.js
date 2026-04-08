@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
 import './Eventos.css';
 
@@ -37,10 +38,12 @@ function formatHora(value) {
     return String(value);
 }
 
-export default function Eventos() {
+export default function Eventos({ modo = 'home' }) {
     const [eventos, setEventos] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [search, setSearch] = useState('');
+    const [filtroLocal, setFiltroLocal] = useState('todos');
     const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
     useEffect(() => {
@@ -62,8 +65,19 @@ export default function Eventos() {
         load();
     }, []);
 
-    const eventosVisiveis = eventos.slice(0, visibleCount);
-    const hasMore = visibleCount < eventos.length;
+    const locais = [...new Set(eventos.map((e) => e.local).filter(Boolean))];
+    const eventosFiltrados = eventos.filter((e) => {
+        const texto = `${e.nome} ${e.descricao ?? ''} ${e.local ?? ''}`.toLowerCase();
+        const bateBusca = texto.includes(search.toLowerCase().trim());
+        const bateLocal = filtroLocal === 'todos' || e.local === filtroLocal;
+        return bateBusca && bateLocal;
+    });
+
+    const eventosVisiveis = eventosFiltrados.slice(0, visibleCount);
+    const mostrarBotaoVerTodos = modo === 'home';
+    const mostrarFiltros = modo === 'calendario';
+    const mostrarBotaoMostrarMais = modo === 'calendario';
+    const hasMore = visibleCount < eventosFiltrados.length;
 
     const handleShowMore = () => {
         setVisibleCount((prev) => prev + PAGE_SIZE);
@@ -75,6 +89,34 @@ export default function Eventos() {
     return (
         <section className='evento-section' id='eventos'>
             <h2>Próximos Eventos de Nossa Casa</h2>
+
+            {mostrarFiltros && (
+                <div className='evento-filtros'>
+                    <input
+                        className='evento-filtro-input'
+                        type='text'
+                        placeholder='Pesquisar por nome, local ou descrição'
+                        value={search}
+                        onChange={(e) => {
+                            setSearch(e.target.value);
+                            setVisibleCount(PAGE_SIZE);
+                        }}
+                    />
+                    <select
+                        className='evento-filtro-select'
+                        value={filtroLocal}
+                        onChange={(e) => {
+                            setFiltroLocal(e.target.value);
+                            setVisibleCount(PAGE_SIZE);
+                        }}
+                    >
+                        <option value='todos'>Todos os locais</option>
+                        {locais.map((local) => (
+                            <option key={local} value={local}>{local}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
 
             <div className='evento-container'>
                 {eventosVisiveis.map((e) => (
@@ -99,10 +141,16 @@ export default function Eventos() {
                 ))}
             </div>
 
-            {hasMore && (
+            {mostrarBotaoMostrarMais && hasMore && (
                 <button className='evento-showmore' onClick={handleShowMore}>
                     Mostrar mais eventos
                 </button>
+            )}
+
+            {mostrarBotaoVerTodos && (
+                <Link className='evento-showmore evento-link-button' to='/eventos'>
+                    Ver todos os eventos
+                </Link>
             )}
         </section>
     );

@@ -51,6 +51,30 @@
         0 2px 12px rgba(0, 0, 0, 0.137);
 }
 
+@media (max-width: 1024px) {
+    .card-section {
+        flex-direction: column;
+        width: 100%;
+        align-items: center;
+    }
+
+    .card {
+        width: min(680px, 100%);
+        margin: 1em 0;
+    }
+}
+
+@media (max-width: 700px) {
+    .card {
+        padding: 1em;
+    }
+
+    .card-titulo-container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
 
 /*
 card-section

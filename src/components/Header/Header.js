@@ -1,6 +1,12 @@
 import './Header.css';
+import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 
 const Header = () => {
+    const [menuAberto, setMenuAberto] = useState(false);
+
+    const handleCloseMenu = () => setMenuAberto(false);
+
     return (
         <div className="header">
             <div className="header-logo-container">
@@ -10,13 +16,25 @@ const Header = () => {
                     <p className='header-sub-title'>Tiago de Sàngó Aganjù e Rosangela de Oṣun Pandá</p>
                 </div>
             </div>
-            <nav className='header-nav'>
-                <a className="header-menu" href="#inicio">Início</a>
-                <a className="header-menu" href="#about">Sobre Nós</a>
-                <a className="header-menu" href="#eventos">Calendário</a>
-                <a className="header-menu" href="#shop">Catálogo</a>
-                <a className="header-menu" href="#footer">Contato</a>
-                <a className="header-menu login-button" href='https://youtube.com'><img className='button_icon' src="/images/icons/user-icon.png" alt=''/> Área Restrita</a>
+
+            <button
+                className="header-hamburger"
+                type="button"
+                aria-label="Abrir menu"
+                onClick={() => setMenuAberto((prev) => !prev)}
+            >
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <nav className={`header-nav ${menuAberto ? 'open' : ''}`}>
+                <NavLink className="header-menu" to="/" onClick={handleCloseMenu}>Início</NavLink>
+                <NavLink className="header-menu" to="/sobre" onClick={handleCloseMenu}>Sobre Nós</NavLink>
+                <NavLink className="header-menu" to="/eventos" onClick={handleCloseMenu}>Calendário</NavLink>
+                <NavLink className="header-menu" to="/catalogo" onClick={handleCloseMenu}>Catálogo</NavLink>
+                <NavLink className="header-menu" to="/contato" onClick={handleCloseMenu}>Contato</NavLink>
+                <NavLink className="header-menu login-button" to="/login" onClick={handleCloseMenu}><img className='button_icon' src="/images/icons/user-icon.png" alt=''/> Área Restrita</NavLink>
             </nav>
         </div>
     )

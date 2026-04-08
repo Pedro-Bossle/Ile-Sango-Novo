@@ -55,3 +55,50 @@
     transform: scale(1.05);
     transition: transform 0.3s ease;
 }
+
+@media (max-width: 1024px) {
+    .banner {
+        height: auto;
+        min-height: 48vh;
+        padding: 2em 1em;
+    }
+
+    .banner_titulo {
+        font-size: 1.7em;
+    }
+
+    .banner_box_container {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 1em;
+        margin: 1em 0 0;
+    }
+
+    .banner_box {
+        width: min(320px, 100%);
+    }
+}
+
+@media (max-width: 700px) {
+    .banner {
+        min-height: auto;
+        padding: 1.5em 0.8em;
+    }
+
+    .banner_titulo {
+        font-size: 1.35em;
+    }
+
+    .banner_subtitulo {
+        margin: 0.4em 0 0;
+        font-size: 0.95em;
+    }
+
+    .banner_box_container {
+        width: 100%;
+    }
+
+    .banner_box {
+        padding: 0.85em;
+    }
+}
