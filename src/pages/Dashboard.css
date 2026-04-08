@@ -214,6 +214,27 @@
   border: 1px solid #ccc;
 }
 
+@media (min-width: 981px) {
+  .dash-page {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+  }
+
+  .dash-hamburger,
+  .dash-sidebar-backdrop {
+    display: none;
+  }
+
+  .dash-sidebar {
+    position: sticky;
+    top: 0;
+    right: auto;
+    height: 100vh;
+    width: 250px;
+    transform: none;
+  }
+}
+
 @media (max-width: 980px) {
   .dash-grid-3 {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
