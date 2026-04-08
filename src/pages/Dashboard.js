@@ -282,7 +282,7 @@ const Dashboard = () => {
 
       {sidebarAberta && <div className="dash-sidebar-backdrop" onClick={() => setSidebarAberta(false)} />}
 
-      <aside className={`dash-sidebar drawer ${sidebarAberta ? 'open' : ''}`}>
+      <aside className={`dash-sidebar ${sidebarAberta ? 'open' : ''}`}>
         <h2>Area Restrita</h2>
         <button className={`dash-menu ${menuAtivo === 'visao-geral' ? 'active' : ''}`} onClick={() => { setMenuAtivo('visao-geral'); setSidebarAberta(false); }}>Visao geral</button>
         <button className={`dash-menu ${menuAtivo === 'eventos' ? 'active' : ''}`} onClick={() => { setMenuAtivo('eventos'); setSidebarAberta(false); }}>Eventos</button>
