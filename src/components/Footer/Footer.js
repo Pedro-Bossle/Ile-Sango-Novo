@@ -40,7 +40,7 @@ const Footer = () => {
                 </div>
 
                 <ul className="ul-copyright">
-                    <p className="footer__copyright"> © 2025 Ilê Asé Sàngó Aganjù e Osun Pandá. Todos os direitos reservados.<br></br> Feito por <a className="footer__copyright-link" href="https://www.linkedin.com/in/pedro-bossle-sandi-685625277/" target="_blank">Pedro Bossle Sandi</a></p>
+                    <p className="footer__copyright"> © 2025 Ilê Asé Sàngó Aganjù e Osun Pandá. Todos os direitos reservados.<br></br> Feito por <a className="footer__copyright-link" href="https://www.linkedin.com/in/pedro-bossle-sandi-685625277/" target="_blank" rel="noreferrer">Pedro Bossle Sandi</a></p>
                     <div>
                         <a href="https://youtube.com">Política de Privacidade</a>
                         <a href="https://youtube.com">Termos de uso</a>
