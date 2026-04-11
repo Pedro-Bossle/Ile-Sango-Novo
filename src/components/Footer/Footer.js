@@ -26,7 +26,7 @@ const Footer = () => {
                         <ul>
                             <a className="footer-list_item" href="https://wa.me/555491556023?text=Ol%C3%A1!%20Vim%20pelo%20site%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es/"><img className="icon" src="/images/icons/ico whatsapp.png" alt="facebook icon"></img>(54) 9.9155-6023</a>
                             <a className="footer-list_item" href="mailto:ile.de.ase@gmail.com?subject=Contato&body=Olá, gostaria de saber mais sobre a casa de religião."><img className="icon" src="/images/icons/ico mail.png" alt="mail icon"></img>ile.de.ase@gmail.com</a>
-                            <a className="footer-list_item" href="https://maps.app.goo.gl/xqmvGBdkY1wMJAtg7"><img className="icon" src="/images/icons/ico location.png" alt="pin icon"></img>R. Visc. de Pelotas - Pio X,<br></br> Caxias do Sul - RS, 95020-500</a>
+                            <a className="footer-list_item" href="https://maps.app.goo.gl/xqmvGBdkY1wMJAtg7"><img className="icon" src="/images/icons/ico location.png" alt="pin icon"></img>R. Visc. de Pelotas - Pio X,<br></br> Caxias do Sul - RS, 95034-385</a>
                         </ul>
                     </div>
                     <div className="footer-activity">
