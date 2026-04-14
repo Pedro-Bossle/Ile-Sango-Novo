@@ -86,6 +86,15 @@ ALTER TABLE public.cobrancas DROP CONSTRAINT IF EXISTS cobrancas_membro_key;
 ALTER TABLE public.cobrancas DROP CONSTRAINT IF EXISTS cobrancaas_membro_key;
 
 -- ---------------------------------------------------------------------------
+-- B.1) Eventos: tipo + ícone customizado
+-- ---------------------------------------------------------------------------
+ALTER TABLE public.eventos
+  ADD COLUMN IF NOT EXISTS tipo TEXT DEFAULT 'umbanda';
+
+ALTER TABLE public.eventos
+  ADD COLUMN IF NOT EXISTS icone_customizado TEXT;
+
+-- ---------------------------------------------------------------------------
 -- C) RLS — authenticated: CRUD em todas as tabelas usadas pelo app
 -- ---------------------------------------------------------------------------
 DO $$

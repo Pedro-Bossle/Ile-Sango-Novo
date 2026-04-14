@@ -1,120 +1,237 @@
-.evento-section {
-    text-align: center;
-    background-color: var(--branco-puro);
-    padding: 2em 6em;
+﻿.evento-section {
+  text-align: center;
+  background-color: var(--branco-puro);
+  /* 📐 ESPAÇAMENTO: Padding do container de listagem de eventos */
+  padding: 24px 16px;
 }
 
 .evento-container {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-wrap: wrap;
+  /* 📐 ESPAÇAMENTO: Gap entre cards na página de calendário */
+  gap: 10px;
+  /* 📐 LAYOUT: Distribuição dos cards com espaço uniforme */
+  justify-content: space-evenly;
+  align-items: stretch;
 }
 
-.evento-card {
-    text-align: left;
-    border: 1px solid var(--bordo);
-    border-radius: 8px;
-    margin: 1em;
-    padding: 1em 2em;
-    min-height: 270px;
-    display: flex;
-    flex-direction: column;
-    transition: box-shadow 0.55s ease;
+.evento-container .event-card-compact {
+  width: min(100%, 420px);
+  flex: 0 1 420px;
 }
 
-.evento-card:hover {
-    border: 1px solid var(--amarelo-dourado);
-    box-shadow:
-        0 8px 32px rgba(110, 77, 6, 0.342),
-        0 2px 12px rgba(0, 0, 0, 0.137);
+.evento-container--home-desktop {
+  justify-content: center;
+  gap: 10px;
 }
 
-.evento-card-name-container {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.evento-carousel {
+  /* 📐 LAYOUT: Container principal do carrossel — DEVE ter overflow hidden */
+  overflow: hidden;
+  width: 100%;
+  position: relative;
+  max-width: 1120px;
+  margin: 1rem auto 0;
+  padding: 0 3rem 2.2rem;
 }
 
-.evento-card-ico {
-    width: 30px;
+.evento-carousel-viewport {
+  width: 100%;
+  overflow: hidden;
+  padding-top: 6px;
+  margin-top: -6px;
 }
 
-.evento-card-local,
-.evento-card-hora {
-    display: flex;
-    align-items: center;
-    gap: 1em;
+.evento-carousel-track {
+  /* 📐 LAYOUT: Wrapper interno que desliza (o "trilho" do carrossel) */
+  display: flex;
+  /* ⏱ TEMPO: duração da animação */
+  transition: transform 0.6s ease-in-out;
 }
 
+.evento-carousel-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  padding: 0 4px;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: pan-y;
+}
 
-.evento-card-name {
-    color: var(--preto-puro);
+.evento-carousel-slide:active {
+  cursor: grabbing;
+}
+
+.evento-carousel-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 📐 ESPAÇAMENTO: Gap entre os 2 cards visíveis no carrossel */
+  gap: 18px;
+  justify-items: center;
+}
+
+.evento-carousel-row.is-single {
+  grid-template-columns: 1fr;
+}
+
+.evento-carousel-row .event-card-compact {
+  /* 📐 TAMANHO: Card ocupa toda a coluna visível no desktop */
+  width: 100%;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 520px;
+}
+
+.evento-carousel-row.is-single .event-card-compact {
+  width: min(92vw, 420px);
+}
+
+.evento-carousel-btn {
+  z-index: 10;
+  position: absolute;
+  top: 42%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  /* 🎨 COR: Seta de navegação — ajuste cor e opacidade conforme o tema */
+  color: rgba(243, 232, 255, 0.6);
+  background-color: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(197, 124, 29, 0.35);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.evento-carousel:hover .evento-carousel-btn {
+  opacity: 1;
+}
+
+.evento-carousel-btn--prev {
+  left: 8px;
+}
+
+.evento-carousel-btn--next {
+  right: 8px;
+}
+
+.evento-carousel-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 0.5rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.45rem;
+}
+
+.evento-carousel-dot {
+  width: 9px;
+  height: 9px;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  /* 🎨 COR: Bolinha de paginação inativa — cor neutra discreta */
+  background-color: #4b2d6b;
+}
+
+.evento-carousel-dot.is-active {
+  width: 26px;
+  /* 🎨 COR: Bolinha de paginação ativa — cor de acento do projeto */
+  background-color: #9333ea;
 }
 
 .evento-showmore {
-    padding: 1em;
-    border-radius: 8px;
-    border: 1px solid var(--cinza);
-    font-size: 1rem;
-    color: var(--cinza-fonte);
-    font-style: italic;
-    background-color: var(--branco-puro);
-    transition: transform 0.3s ease;
+  margin-top: 1rem;
+  padding: 1em;
+  border-radius: 8px;
+  border: 1px solid var(--cinza);
+  font-size: 1rem;
+  color: var(--cinza-fonte);
+  font-style: italic;
+  background-color: var(--branco-puro);
+  transition: transform 0.3s ease;
 }
 
 .evento-showmore:hover {
-    color: var(--bordo);
-    transition: color 0.3s ease;
-    transform: scale(1.01);
-    transition: transform 0.3s ease;
+  color: var(--bordo);
+  transform: scale(1.01);
 }
 
 .evento-link-button {
-    text-decoration: none;
-    display: inline-block;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .evento-filtros {
-    margin: 0 auto 1rem;
-    max-width: 900px;
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 0.75rem;
+  margin: 0 auto 1rem;
+  max-width: 900px;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 0.75rem;
 }
 
 .evento-filtro-input,
 .evento-filtro-select {
-    border: 1px solid var(--cinza);
-    border-radius: 8px;
-    padding: 0.7rem 0.8rem;
-    font-size: 0.95rem;
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: block;
+  margin: 0;
+  border: 1px solid var(--cinza);
+  border-radius: 8px;
+  padding: 0.7rem 0.8rem;
+  font-size: 0.95rem;
 }
 
 @media (max-width: 1200px) {
-    .evento-section {
-        padding: 2em;
-    }
-
-    .evento-container {
-        grid-template-columns: repeat(2, 1fr);
-    }
+  .evento-container .event-card-compact {
+    flex-basis: 380px;
+    width: min(100%, 380px);
+  }
 }
 
 @media (max-width: 800px) {
-    .evento-section {
-        padding: 2em 1em;
-    }
+  .evento-section {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
 
-    .evento-container {
-        grid-template-columns: 1fr;
-    }
+  .evento-container {
+    justify-content: center;
+  }
 
-    .evento-filtros {
-        grid-template-columns: 1fr;
-    }
+  .evento-filtros {
+    grid-template-columns: 1fr;
+  }
+
+  .evento-carousel {
+    padding: 0 0.2rem 2.2rem;
+  }
+
+  .evento-carousel-slide {
+    padding: 0 8px;
+  }
+
+  .evento-carousel-btn {
+    display: none;
+  }
+
+  .evento-carousel-row {
+    grid-template-columns: 1fr;
+  }
+
+  .evento-carousel-row .event-card-compact {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .evento-container .event-card-compact {
+    flex-basis: 100%;
+    width: 100%;
+    max-width: 420px;
+  }
 }
-
-
-
-/*
-
-*/

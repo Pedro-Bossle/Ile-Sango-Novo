@@ -2,13 +2,36 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import './Dashboard.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Cropper from 'react-easy-crop';
 import { MembrosScreen } from '../components/dashboard/membros/MembrosScreen.tsx';
 import { CobrancasScreen } from '../components/dashboard/cobrancas/CobrancasScreen.tsx';
 
 const MENUS = ['visao-geral', 'eventos', 'catalogo', 'membros', 'cobrancas'];
 
-const defaultEvento = { id: null, nome: '', data: '', hora: '', local: '', descricao: '' };
+const defaultEvento = { id: null, nome: '', data: '', hora: '', local: '', descricao: '', tipo: 'umbanda', icone_customizado: null };
 const defaultCatalogo = { id: null, nome: '', categoria: '', valor: '', descricao: '', variacoes: '' };
+
+async function gerarImagemCropada(src, area) {
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = reject;
+    i.src = src;
+  });
+  const canvas = document.createElement('canvas');
+  // 🔵 ÍCONE: Tamanho final do ícone salvo para uso no card
+  const size = 256;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Não foi possível processar a imagem.');
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(img, area.x, area.y, area.width, area.height, 0, 0, size, size);
+  return canvas.toDataURL('image/png');
+}
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -28,6 +51,11 @@ const Dashboard = () => {
   const [catalogoForm, setCatalogoForm] = useState(defaultCatalogo);
   const [mostrarModalEvento, setMostrarModalEvento] = useState(false);
   const [mostrarModalCatalogo, setMostrarModalCatalogo] = useState(false);
+  const [mostrarCropEvento, setMostrarCropEvento] = useState(false);
+  const [imagemTempEvento, setImagemTempEvento] = useState('');
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [areaCrop, setAreaCrop] = useState(null);
   const modalRef = useRef(null);
 
   const carregarDados = useCallback(async () => {
@@ -42,7 +70,7 @@ const Dashboard = () => {
       { data: cobrancasIds, error: cobrancasCountError },
     ] = await Promise.all([
       supabase.auth.getSession(),
-      supabase.from('eventos').select('id, nome, data, hora, local, descricao').order('data', { ascending: true }),
+      supabase.from('eventos').select('id, nome, data, hora, local, descricao, tipo, icone_customizado').order('data', { ascending: true }),
       supabase.from('catalogo').select('id, nome, categoria, valor, descricao, variacoes').order('id', { ascending: true }),
       // `count` + head:true pode devolver valor errado em alguns casos; o tamanho da lista de ids
       // corresponde ao que o utilizador pode ver (RLS) e à contagem real de linhas.
@@ -72,17 +100,18 @@ const Dashboard = () => {
 
   useEffect(() => {
     const handleClickFora = (event) => {
-      if (!mostrarModalEvento && !mostrarModalCatalogo) return;
+      if (!mostrarModalEvento && !mostrarModalCatalogo && !mostrarCropEvento) return;
       if (modalRef.current && !modalRef.current.contains(event.target)) {
         setMostrarModalEvento(false);
         setMostrarModalCatalogo(false);
+        setMostrarCropEvento(false);
         setEventoForm(defaultEvento);
         setCatalogoForm(defaultCatalogo);
       }
     };
     document.addEventListener('mousedown', handleClickFora);
     return () => document.removeEventListener('mousedown', handleClickFora);
-  }, [mostrarModalEvento, mostrarModalCatalogo]);
+  }, [mostrarModalEvento, mostrarModalCatalogo, mostrarCropEvento]);
 
   const eventosProximos = useMemo(() => eventos.slice(0, 3), [eventos]);
   const locais = useMemo(() => [...new Set(eventos.map((e) => e.local).filter(Boolean))], [eventos]);
@@ -123,6 +152,8 @@ const Dashboard = () => {
       hora: eventoForm.hora,
       local: eventoForm.local,
       descricao: eventoForm.descricao,
+      tipo: eventoForm.tipo || 'umbanda',
+      icone_customizado: eventoForm.tipo === 'outro' ? eventoForm.icone_customizado || null : null,
     };
     const { error: saveError } = eventoForm.id
       ? await supabase.from('eventos').update(payload).eq('id', eventoForm.id)
@@ -179,6 +210,38 @@ const Dashboard = () => {
   const abrirAdicaoEvento = () => {
     setEventoForm(defaultEvento);
     setMostrarModalEvento(true);
+  };
+
+  const selecionarTipoEvento = (tipo) => {
+    setEventoForm((prev) => ({
+      ...prev,
+      tipo,
+      icone_customizado: tipo === 'outro' ? prev.icone_customizado : null,
+    }));
+  };
+
+  const onUploadIconeEvento = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setImagemTempEvento(String(reader.result ?? ''));
+      setCrop({ x: 0, y: 0 });
+      setZoom(1);
+      setMostrarCropEvento(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const confirmarCropEvento = async () => {
+    if (!imagemTempEvento || !areaCrop) return;
+    try {
+      const base64 = await gerarImagemCropada(imagemTempEvento, areaCrop);
+      setEventoForm((prev) => ({ ...prev, tipo: 'outro', icone_customizado: base64 }));
+      setMostrarCropEvento(false);
+      setImagemTempEvento('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erro ao recortar ícone.');
+    }
   };
 
   const abrirAdicaoCatalogo = () => {
@@ -417,11 +480,63 @@ const Dashboard = () => {
                 value={eventoForm.descricao}
                 onChange={(e) => setEventoForm({ ...eventoForm, descricao: e.target.value })}
               />
-              <button type="submit">Salvar evento</button>
+              <div className="dash-field dash-field--full dash-event-type-wrap">
+                <span>Tipo de Evento</span>
+                <select value={eventoForm.tipo} onChange={(e) => selecionarTipoEvento(e.target.value)}>
+                  <option value="umbanda">Umbanda</option>
+                  <option value="quimbanda">Quimbanda</option>
+                  <option value="nacao">Nação</option>
+                  <option value="outro">Outro</option>
+                </select>
+                {eventoForm.tipo === 'outro' && (
+                  <label className="dash-field dash-field--full">
+                    <span>Ícone personalizado</span>
+                    <input type="file" accept="image/*" onChange={(e) => onUploadIconeEvento(e.target.files?.[0])} />
+                  </label>
+                )}
+              </div>
+              <div className="dash-form-actions dash-form-actions--modal-end">
+                <button type="submit" className="dash-btn-primary">
+                  Salvar evento
+                </button>
+              </div>
             </form>
             <button className="dash-close" onClick={() => setMostrarModalEvento(false)}>
               Fechar
             </button>
+          </div>
+        </div>
+      )}
+
+      {mostrarCropEvento && (
+        <div className="dash-modal-overlay">
+          <div className="dash-modal dash-modal--narrow" ref={modalRef}>
+            <h2>Recortar ícone do evento</h2>
+            <div className="dash-crop-area">
+              <Cropper
+                image={imagemTempEvento}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onZoomChange={setZoom}
+                onCropComplete={(_, croppedAreaPixels) => setAreaCrop(croppedAreaPixels)}
+              />
+            </div>
+            <label className="dash-field">
+              <span>Zoom</span>
+              <input type="range" min={1} max={3} step={0.05} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
+            </label>
+            <div className="dash-form-actions">
+              <button type="button" className="dash-btn-secondary" onClick={() => setMostrarCropEvento(false)}>
+                Cancelar
+              </button>
+              <button type="button" className="dash-btn-primary" onClick={() => void confirmarCropEvento()}>
+                Aplicar recorte
+              </button>
+            </div>
           </div>
         </div>
       )}

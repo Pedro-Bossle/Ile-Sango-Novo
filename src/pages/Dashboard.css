@@ -903,3 +903,76 @@
   font-size: 0.92rem;
   color: #444;
 }
+
+.dash-event-type-wrap {
+  margin-top: 0.4rem;
+}
+
+.dash-event-type-wrap select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.dash-event-type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.dash-event-type-btn {
+  min-height: 92px;
+  border-radius: 10px;
+  border: 1px solid #d8d1ca;
+  /* 🎨 COR: Fundo do botão de tipo não selecionado — neutro escuro */
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #3e3125;
+  font-weight: 600;
+  cursor: pointer;
+  display: grid;
+  gap: 0.35rem;
+  justify-items: center;
+  align-content: center;
+}
+
+.dash-event-type-btn.is-active {
+  /* 🎨 COR: Borda do botão de tipo selecionado — cor de acento ativa */
+  border-color: #9333ea;
+  /* 🎨 COR: Fundo do botão de tipo selecionado — versão translúcida do acento */
+  background-color: rgba(147, 51, 234, 0.15);
+}
+
+.dash-event-type-icon {
+  /* 🔵 ÍCONE: Tamanho do círculo do ícone no seletor */
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.dash-event-type-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dash-crop-area {
+  position: relative;
+  height: 280px;
+  margin: 0.75rem 0;
+  border-radius: 12px;
+  overflow: hidden;
+  /* 🎨 COR: Fundo do crop para contraste da imagem */
+  background: #16121f;
+}
+
+.dash-form-actions--modal-end {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+}
+
+@media (max-width: 767px) {
+  .dash-event-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
