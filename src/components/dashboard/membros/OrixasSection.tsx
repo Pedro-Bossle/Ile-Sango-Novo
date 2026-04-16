@@ -40,7 +40,7 @@ export function OrixasSection({ orixas, cadastro, setCadastroField }: Props) {
         onRezaChange={(v) => setCadastroField('orixa_corpo_reza', v)}
       />
       <OrixaQualidadePair
-        label="Orixá caminho"
+        label="Orixá Passagem"
         orixas={orixas}
         orixaId={cadastro.orixa_caminho_id}
         qualidadeId={cadastro.qualidade_caminho_id}
@@ -51,7 +51,7 @@ export function OrixasSection({ orixas, cadastro, setCadastroField }: Props) {
         onRezaChange={(v) => setCadastroField('orixa_caminho_reza', v)}
       />
       <OrixaQualidadePair
-        label="Orixá passagem"
+        label="Orixá Saída"
         orixas={orixas}
         orixaId={cadastro.orixa_passagem_id}
         qualidadeId={cadastro.qualidade_passagem_id}
