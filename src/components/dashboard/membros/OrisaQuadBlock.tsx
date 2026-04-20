@@ -57,8 +57,8 @@ type Props = {
 
 /**
  * Grelha: Orisá | Qualidade | Digina | Sobrenome do Orisá (1/4 cada).
- * Sobrenomes vêm de `sobrenomes_orisa` filtrados por `qualidade_id` (mesma lógica de pertença
- * que liga qualidades ao orixa). Abaixo: campo Reza (textarea), como no formulário anterior.
+ * Sobrenomes vêm de `sobrenomes_orisa` por `qualidade_id` e, sem qualidade,
+ * usam fallback por `orixa_id` com `qualidade_id` nulo.
  */
 export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroField }: Props) {
   const f = SECTION_FIELDS[section];
@@ -69,11 +69,7 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
   const [loadingQual, setLoadingQual] = useState(false);
   const [sobrenomes, setSobrenomes] = useState<SobrenomeOrisaRow[]>([]);
   const [loadingSob, setLoadingSob] = useState(false);
-
-  /** Select HTML devolve string; Supabase pode devolver id numérico — comparar como string. */
   const nomeOrixa = orixas.find((o) => String(o.id) === String(orixaId))?.nome?.trim() ?? '';
-  const nomeQualidade =
-    qualidades.find((q) => String(q.id) === String(qualidadeId))?.nome?.trim() ?? '';
 
   useEffect(() => {
     let cancelled = false;
@@ -108,9 +104,7 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
     setLoadingSob(true);
     fetchSobrenomesOrisa({
       qualidadeId: qualidadeId || null,
-      orisaNome: nomeOrixa,
-      qualidadeNome: nomeQualidade,
-      orixaSemQualidades,
+      orixaId: orixaId || null,
     })
       .then((rows) => {
         if (!cancelled) setSobrenomes(rows);
@@ -124,7 +118,7 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
     return () => {
       cancelled = true;
     };
-  }, [orixaId, qualidadeId, nomeOrixa, nomeQualidade, orixaSemQualidades]);
+  }, [orixaId, qualidadeId, orixaSemQualidades]);
 
   const disabledQual = !orixaId || loadingQual;
   const disabledSobrenome =
@@ -166,15 +160,6 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
           </select>
         </label>
         <label className="dash-field">
-          <span>Digina</span>
-          <input
-            type="text"
-            value={String(cadastro[f.digina] ?? '')}
-            onChange={(e) => setCadastroField(f.digina, e.target.value)}
-            placeholder="Digina"
-          />
-        </label>
-        <label className="dash-field">
           <span>Sobrenome do Orisá</span>
           <select
             value={String(cadastro[f.sobrenome] ?? '')}
@@ -189,6 +174,15 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
               </option>
             ))}
           </select>
+        </label>
+        <label className="dash-field">
+          <span>Digina</span>
+          <input
+            type="text"
+            value={String(cadastro[f.digina] ?? '')}
+            onChange={(e) => setCadastroField(f.digina, e.target.value)}
+            placeholder="Digina"
+          />
         </label>
       </div>
 

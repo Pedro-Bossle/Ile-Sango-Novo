@@ -1,0 +1,879 @@
+orixa_id	qualidade_id	nome
+1	2	Alalupagema
+1	2	Açuã
+1	2	Beí
+1	2	Bô
+1	2	Bemi
+1	2	Berí
+1	2	Bomi
+1	2	Bicuim
+1	2	Borocum
+1	2	Denim
+1	2	Djeteiú
+1	2	Dalé
+1	2	Elupanda
+1	2	Elauê
+1	2	Fumí
+1	2	Fumilalô
+1	2	Lonã
+1	2	Lakê
+1	2	Modibau
+1	2	Motim
+1	2	Nabuê
+1	2	Obí
+1	2	Obê-emí
+1	2	Sapatá
+1	2	Xê
+1	4	Ajanadá
+1	4	Aguidê
+1	4	Aguidê-omí
+1	4	Borocum
+1	4	Berim
+1	4	Bí
+1	4	Belomí
+1	4	Birim
+1	4	Bomí
+1	4	Caminoloa
+1	4	Dikí
+1	4	Deí
+1	4	Epanadá
+1	4	Inguê
+1	4	Kraví
+1	4	Larom
+1	4	Lonã
+1	4	Lapô
+1	4	Naum
+1	4	Sebiú
+1	4	Tukí
+1	4	Tuebí
+1	5	Apanadá
+1	5	Bí-omí
+1	5	Biomí
+1	5	Bí
+1	5	Darê
+1	5	Deí
+1	5	Demí
+1	5	Emim
+1	5	Funiqué
+1	5	Gebí
+1	5	Grajé
+1	5	Idê
+1	5	Lolú
+1	5	Lonan
+1	5	Lobí
+1	5	Niquê
+1	5	Remí
+1	5	Tolalú
+1	5	Tolabí
+1	5	Unã
+1	3	Aguidê
+1	3	Aguidê-omí
+1	3	Apanadá-lanã
+1	3	Açanã
+1	3	Bí
+1	3	Bilanã
+1	3	Belomí
+1	3	Borocum
+1	3	Borocum-lanã
+1	3	Crony
+1	3	Diquí
+1	3	Dê
+1	3	Deí
+1	3	Darê
+1	3	Emí
+1	3	Funiqué
+1	3	Haraxê
+1	3	Hô
+1	3	Homí
+1	3	Krajeú
+1	3	Kaminoloa
+1	3	Laqué
+1	3	Mí
+1	3	Odeí
+1	3	Omulúm
+1	3	Tukí
+1	3	Tirirí
+1	3	Tiriri-lanã
+2	6	Adeí
+2	6	Abedê
+2	6	Adiolá
+2	6	Beí
+2	6	Bomaté
+2	6	Doveí
+2	6	Deí
+2	6	Elefá
+2	6	Elunã
+2	6	Jarê
+2	6	Onira
+2	6	Olobedê
+2	6	Peremí
+2	6	Roneí
+2	6	Riolú
+2	7	Adiocô
+2	7	Adiolá
+2	7	Avagã
+2	7	Bolá
+2	7	Beí
+2	7	Djobí
+2	7	Doveí
+2	7	Darê
+2	7	Dê
+2	7	Luã
+2	7	Lobe-dê
+2	7	Malê
+2	7	Olobedê
+2	7	Obiratã
+2	7	Peremí
+2	8	Anirê
+2	8	Adio-laia
+2	8	Avagã
+2	8	Adiolá
+2	8	Abedê
+2	8	Bomaté
+2	8	Bomí
+2	8	Cassadójo
+2	8	Darê
+2	8	Elefá
+2	8	Irajê
+2	8	Miremí
+2	8	Naruê
+2	8	Onira
+2	8	Onira-adiolá
+2	9	Adeíba
+2	9	Adeí
+2	9	Avagã
+2	9	Birí
+2	9	Bomí
+2	9	Bolá
+2	9	Dê
+2	9	Jarê
+2	9	Lecí
+2	9	Megê
+2	9	Nira
+2	9	Onirê
+2	9	Onira
+2	9	Olobedê
+2	9	Omí
+2	9	Onira-olobedê
+2	9	Omim-marê
+2	9	Riolú
+3	11	Bará-tenã
+3	11	Balê
+3	11	Dilajá
+3	11	Daní
+3	11	Difí
+3	11	Kitala
+3	11	Lajá
+3	11	Odá
+3	11	Tofan
+3	12	Akí
+3	12	Bomí-micê
+3	12	Cará
+3	12	Dilajá
+3	12	Daní
+3	12	Ditolá
+3	12	Dilaim
+3	12	Difí
+3	12	Fumí
+3	12	Lajá
+3	12	Micê
+3	12	Miguê
+3	12	Tofan
+3	10	Abedê
+3	10	Akí
+3	10	Bolá
+3	10	Cará
+3	10	Diolá
+3	10	Diuá
+3	10	Di-beijí
+3	10	Delê
+3	10	Dê
+3	10	Difí
+3	10	Dilaim
+3	10	Emí
+3	10	Lajá
+3	10	Latê
+3	10	Ladê
+3	10	Miguê
+3	10	Mí
+3	10	Miuá
+3	10	Micê
+3	10	Nirê
+3	10	Ninã
+3	10	Tofan
+3	10	Tolá
+3	13	Bomí
+3	13	Bomí-micê
+3	13	Bará-tenã
+3	13	Demí
+3	13	Ditolá
+3	13	Diodá
+3	13	Dilajá
+3	13	Deí
+3	13	Doaê
+3	13	Funiqué
+3	13	Iomí
+3	13	Kitala
+3	13	Ladiá
+3	13	Mitolá
+3	13	Miodá
+3	13	Mirê
+3	13	Miremí
+3	13	Niquê
+3	13	Odá
+3	13	Sessú
+3	13	Taladê
+4	15	Awá
+4	15	Açuã
+4	15	Baim
+4	15	Barú
+4	15	Deí
+4	15	Doum
+4	15	Dolua-midi-omí
+4	15	Irá
+4	15	Luá
+4	15	Midiomí
+4	15	Midi-omí-oduluá
+4	15	Oduluá
+4	15	Omí
+4	15	Oduluá-midi-omí
+4	15	Tokí
+4	15	Tokiú
+4	15	Toquim
+4	15	Tuquê
+4	14	Açuã
+4	14	Bolá
+4	14	Boboxê
+4	14	Bibolá
+4	14	Baim
+4	14	Bomí
+4	14	Barú
+4	14	Deí
+4	14	Demí
+4	14	Delê
+4	14	Dopan
+4	14	Doluar
+4	14	Emí
+4	14	Fukê
+4	14	Fumilayô
+4	14	Herí
+4	14	Idê
+4	14	Irá
+4	14	Lelê
+4	14	Muquê
+4	14	Mací
+4	14	Mukê
+4	14	Odeí
+4	14	Oloxê
+4	14	Oí
+4	14	Okô-axé
+4	14	Toiô-elê
+4	14	Toelê
+4	14	Toió
+4	14	Tuquê
+4	14	Tukí
+4	14	Unã
+4	16	Aluá
+4	16	Aloxê
+4	16	Abaluá
+4	16	Amalaci
+4	16	Abaduamí
+4	16	Baruálofina
+4	16	Babá-alafim
+4	16	Bamboxê
+4	16	Boboxê
+4	16	Babá-orofina
+4	16	Doluá
+4	16	Dadá
+4	16	Edumbadeí
+4	16	Iwá
+4	16	Klaobê
+4	16	Kamucá
+4	16	Luá
+4	16	Lofina
+4	16	Odumbadeí
+4	16	Oloquê
+4	16	Olofukê
+4	16	Odemá
+4	16	Oko-axé
+4	16	Sabalujá
+4	16	Toqui
+4	16	Taiô
+4	16	Tokí
+4	16	Toquim
+4	16	Zanzadureí
+6		Abelujam
+6		Abaim
+6		Alê
+6		Burú
+6		Belujam
+6		Bilade
+6		Bomí
+6		Cadinã
+6		Cardinam
+6		Dirê
+6		Deí
+6		Dê
+6		Elefaburú
+6		Emí
+6		Indê
+6		Jipê
+6		Labiá
+6		Latê
+6		Ludú
+6		Malê
+6		Miremí
+6		Mirê
+6		Mí
+6		Omiburú
+6		Oberemí
+6		Omintundê
+6		Omialê
+6		Omí
+6		Omimalê
+6		Omimarú
+6		Ride
+6		Tindê
+5		Abelujam
+5		Abaim
+5		Alê
+5		Burú
+5		Belujam
+5		Bilade
+5		Bomí
+5		Cadinã
+5		Cardinam
+5		Dirê
+5		Deí
+5		Dê
+5		Elefaburú
+5		Emí
+5		Indê
+5		Jipê
+5		Labiá
+5		Latê
+5		Ludú
+5		Malê
+5		Miremí
+5		Mirê
+5		Mí
+5		Omiburú
+5		Oberemí
+5		Omintundê
+5		Omialê
+5		Omí
+5		Omimalê
+5		Omimarú
+5		Ride
+5		Tindê
+8		Aquê
+8		Ajubê
+8		Ambí
+8		Bí
+8		Beremim
+8		Beremim-ossé
+8		Benedí
+8		Baduê
+8		Beremí
+8		Dequê
+8		Dompê
+8		Difí
+8		Fumaguê
+8		Guê
+8		Guetemã
+8		Lajupê
+8		Miguê
+8		Miuá
+8		Malê
+8		Niquê
+8		Obiotá
+8		Ossí
+8		Osanibim
+8		Oguniquê
+8		Rá
+8		Seká
+8		Sereubá
+8		Tolá
+8		Tunexê
+8		Tumichê
+7		Axurum
+7		Bomí
+7		Beremim-omí
+7		Dê
+7		Daí
+7		Demim
+7		Fumí
+7		Fumí-layô
+7		Fumí-otá
+7		Fumilakê
+7		Koemí
+7		Layô
+7		Ladê
+7		Labaê
+7		Ladiá
+7		Lafim
+7		Lukê
+7		Lubemí
+7		Mirê
+7		Mideí
+7		Nikê
+7		Nafioquê
+7		Olomí-otá
+7		Olomí
+7		Suemí
+7		Sumí-otá
+7		Soarê
+7		Taladê
+9	17	Atá-udê
+9	17	Bolá
+9	17	Djobí
+9	17	Dionã
+9	17	Djobí-toió
+9	17	Djobí-teum
+9	17	Dompê
+9	17	Inatá
+9	17	Idu-ôfã
+9	17	Jobioní
+9	17	Jubeteó
+9	17	Jobí-teiú
+9	17	Jobí
+9	17	Omí-dompê
+9	17	Obô-robô
+9	17	Tanhã
+9	17	Tonhô
+9	17	Teum
+9	17	Udê
+9	18	Irocô
+9	18	Mido-sum
+9	18	Orocô
+9	18	Onirobô
+9	18	Omimarum
+9	18	Obeloní
+9	18	Obe-oní
+9	18	Obemim
+9	18	Obe-jobí
+9	18	Obeteum
+9	18	Obetoió
+9	18	Omimbolá
+9	18	Obe-emim
+9	18	Omidê
+9	18	Omirô
+9	18	Omiorobô
+9	18	Omí-barum
+9	18	Omo-robô
+9	18	Obirabará
+9	18	Okô
+9	18	Omitoió
+9	18	Toió
+9	18	Teiú
+9	19	Ajorotóm
+9	19	Baruê
+9	19	Costasum
+9	19	Costasanfrê
+9	19	Costabaruê
+9	19	Costasunsê
+9	19	Djam-djam
+9	19	Gama
+9	19	Guanguãna
+9	19	Guenví
+9	19	Obi-robô
+9	19	Obi-taió
+9	19	Obi-ti-udê
+9	19	Olokô
+9	19	Obi-tunjê
+9	19	Obibolá
+9	19	Obi-alê
+10	21	Aguidá
+10	21	Aguidá-mí
+10	21	Bomí
+10	21	Digama
+10	21	Dudú
+10	21	Dê
+10	21	Didú
+10	21	Demí
+10	21	Diní
+10	21	Dinibomí
+10	21	Dewê
+10	21	Diniomí
+10	21	Dinilomí
+10	21	Dioni
+10	21	Dionicí
+10	21	Decí
+10	21	Deí
+10	21	Iomã
+10	21	Iocí
+10	21	Ie ie erichê
+10	21	Locí
+10	21	Maré
+10	21	Miuá
+10	21	Mobomí
+10	21	Mirê
+10	21	Ninã
+10	21	Niná-demí
+10	21	Omiolobá
+10	21	Ocí
+10	21	Olomí
+10	21	Olobomí
+10	21	Olocim
+10	20	Aguidá
+10	20	Aguidá-mí
+10	20	Adimun
+10	20	Bomí
+10	20	Beremí
+10	20	Dê
+10	20	Deí
+10	20	Demun
+10	20	Decí
+10	20	Dionicí
+10	20	Dioní
+10	20	Dewê
+10	20	Diniomí
+10	20	Dinilomí
+10	20	Diní
+10	20	Dinibomí
+10	20	Didú
+10	20	Demí
+10	20	Dudú
+10	20	Digama
+10	20	Ie le Erichê
+10	20	Iocí
+10	20	Iomã
+10	20	Lomí
+10	20	Locí
+10	20	Mobomí
+10	20	Miuá
+10	20	Mirê
+10	20	Maré
+10	20	Niná
+10	20	Niná-demí
+10	20	Olobomí
+10	20	Olomí
+10	20	Olocim
+10	20	Ocí
+10	20	Omiuá
+10	20	Olobá
+10	20	Omibolá
+10	20	Tuké
+10	22	Aminarê
+10	22	Alaôro
+10	22	Dokô
+10	22	Adimun-idê
+10	22	Bambalá
+10	22	Bambalawebo
+10	22	Beremim-omí
+10	22	Dã
+10	22	Duô
+10	22	Emiremí
+10	22	Emireomí
+10	22	Emilomí
+10	22	Emibomí
+10	22	Emiomã
+10	22	Emiocí
+10	22	Emiodaça
+10	22	Emiomí
+10	22	Emiuê
+10	22	Iaôro
+10	22	Ludú
+10	22	Miremí
+10	22	Mirê
+10	22	Oní
+10	22	Olobá
+10	22	Omí
+10	22	Olelê-omí
+10	22	Orugã
+10	22	Raçanã
+10	22	Uiagadê
+10	23	Atolá
+10	23	Adocô
+10	23	Bomí
+10	23	Carurum
+10	23	Carurum-bolá
+10	23	Diuá
+10	23	Dopon
+10	23	Duô
+10	23	Delê
+10	23	Diniocí
+10	23	Diniobí
+10	23	Diniodá
+10	23	Dinioá
+10	23	Dokô
+10	23	Emí
+10	23	Epandá
+10	23	Icári
+10	23	Iecariô
+10	23	Iaôro
+10	23	Ladiá
+10	23	Lobe-edé
+10	23	Miuá
+10	23	Midéle
+10	23	Niqué
+10	23	Odá
+10	23	Oló
+10	23	Omiorô-oní
+10	23	Omilokum
+10	23	Orô
+10	23	Omi-lokum-idê
+10	23	Tarai-dê
+10	24	Adimun
+10	24	Bambalá
+10	24	Bocô
+10	24	Dudú
+10	24	Emiluá
+10	24	Emí
+10	24	Ie le Dokô
+10	24	Ie le Cari
+10	24	Laké
+10	24	Lokum-idê
+10	24	Midéle
+10	24	Miniouá
+10	24	Miniocí
+10	24	Miniolí
+10	24	Nanã
+10	24	Omiorô
+10	24	Oní-bibolá
+10	24	Odá
+10	24	Olí
+10	24	Omiodaça
+10	24	Olobá
+10	24	Omi-lokum
+10	24	Omiorô-oní
+10	24	Oromí
+10	24	Ocí
+10	24	Omidocô
+10	24	Tiomí
+10	24	Tiodaça
+10	24	Tiolá
+10	24	Taladê
+10	24	Talabí
+10	24	Tualê
+11	25	Afobocí
+11	25	Afalomí
+11	25	Afatoá
+11	25	Afatolá
+11	25	Afaocí
+11	25	Afací
+11	25	Afaemí
+11	25	Afami
+11	25	Afatobí
+11	25	Aebocí
+11	25	Aelomí
+11	25	Aeocí
+11	25	Aetobí
+11	25	Afayabá
+11	25	Agomaré
+11	25	Akré
+11	25	Bemiké
+11	25	Beremí
+11	25	Bomí
+11	25	Djabocí
+11	25	Dilê
+11	25	Emiodô
+11	25	Emiremí
+11	25	Emitobí
+11	25	Emiocí
+11	25	Emeremí
+11	25	Emitoalê
+11	25	Emiké
+11	25	Ialé
+11	25	Iakerê
+11	25	Iakejá
+11	25	Lobocí
+11	25	Ladê
+11	25	Miremí
+11	25	Mitoalê
+11	25	Mike
+11	25	Mirê
+11	25	Nanã
+11	25	Niná
+11	25	Odoaxê
+11	25	Obí
+11	25	Olobocí
+11	25	Ocí
+11	25	Olocí
+11	25	Olomiké
+11	25	Sessun
+11	25	Tobí
+11	25	Toalê
+11	25	Yabocí
+11	26	Aebomí
+11	26	Afaomí
+11	26	Afamiô
+11	26	Afabomi
+11	26	Aeomí
+11	26	Bocí
+11	26	Domí
+11	26	Emiomí
+11	26	Emilomí
+11	26	Emibomí
+11	26	Iakelê
+11	26	Jaomí
+11	26	Jalomí
+11	26	Jaobí
+11	26	Lomí
+11	26	Miniú
+11	26	Miremí
+11	26	Maré
+11	26	Nanã
+11	26	Naruá
+11	26	Omimaré
+11	26	Omidopan
+11	26	Omí-ofá
+11	26	Omí-anú
+11	26	Omitolá
+11	26	Olomí
+11	26	Omitoalê
+11	26	Omí
+11	26	Omiocí
+11	26	Omiaxê
+11	26	Olú
+11	26	Rê
+11	26	Totolê
+11	26	Yabomí
+11	26	Yaomí
+11	27	Afayaomí
+11	27	Domí
+11	27	Domimarú
+11	27	Dopan-naruá
+11	27	Eminanã
+11	27	Iakelê
+11	27	Jalomí
+11	27	Jaomí
+11	27	Jalomirê
+11	27	Ladê
+11	27	Miremio
+11	27	Mikeomí
+11	27	Miniú
+11	27	Nanamí
+11	27	Nanaeu
+11	27	Nanamio
+11	27	Naruá
+11	27	Nakelé
+11	27	Naruá-ibím
+11	27	Omimaré
+11	27	Omí-naruá
+11	27	Olú-omí
+11	27	Omiaxê
+11	27	Rê-omí
+12	28	Atá-u-dê
+12	28	Alufan
+12	28	Becum
+12	28	Bocum
+12	28	Dacum
+12	28	Elefan
+12	28	Efam-deí
+12	28	Elefan-efam-deí
+12	28	Falabí
+12	28	Falufan
+12	28	Kenchá
+12	28	Krinã
+12	28	Nitolê
+12	28	Orocô
+12	28	Olocum
+12	28	Orifan
+12	28	Odomiaia
+12	28	Olobojô
+12	28	Odomaia
+12	28	Oxeredê
+12	28	Omibomai
+12	28	Odomeuí
+12	28	Odoceuí
+12	29	Atá-u-dê
+12	29	Alufan
+12	29	Becum
+12	29	Bocum
+12	29	Dacum
+12	29	Elefan
+12	29	Efam-deí
+12	29	Elefan-efam-deí
+12	29	Falabí
+12	29	Falufan
+12	29	Kenchá
+12	29	Krinã
+12	29	Nitolê
+12	29	Orocô
+12	29	Obocum
+12	29	Orifan
+12	29	Odomiaia
+12	29	Olobojô
+12	29	Odomaia
+12	29	Oxeredê
+12	29	Omibomai
+12	29	Odomeuí
+12	29	Odoceuí
+12	29	Olomirê
+12	29	Orifan-efam-deí
+12	30	Atá-u-dê
+12	30	Alufan
+12	30	Becum
+12	30	Bocum
+12	30	Elefan
+12	30	Efam-deí
+12	30	Elefan-efam-deí
+12	30	Falabí
+12	30	Falufan
+12	30	Kenchá
+12	30	Krinã
+12	30	Nitolê
+12	30	Orocô
+12	30	Obocum
+12	30	Orifan
+12	30	Odomiaia
+12	30	Olobojô
+12	30	Odomaia
+12	30	Oxeredê
+12	30	Omibomai
+12	30	Odomeuí
+12	30	Odoceuí
+12	30	Orifan-efam-deí
+12	31	Bô
+12	31	Babá
+12	31	Bonifan
+12	31	Bí
+12	31	Babakerê
+12	31	Babakejauê
+12	31	Ebí
+12	31	Elerum
+12	31	Grenã
+12	31	Idê
+12	31	Ibím
+12	31	Jibocum
+12	31	Kejauê
+12	31	Lerô
+12	31	Lerum
+12	31	Omí
+12	31	Onifan
+12	31	Omã
+12	31	Oromí
+12	31	Omilá
+12	31	Obí
+12	31	Oromilaia
+12	31	Orifan
+12	31	Obí-omi
+12	31	Taladê
+12	31	Talabí
+12	32	Bô
+12	32	Babá
+12	32	Bonifan
+12	32	Bí
+12	32	Babakerê
+12	32	Babakelê
+12	32	Babakejauê
+12	32	Ebí
+12	32	Elerum
+12	32	Grenã
+12	32	Idê
+12	32	Ibím
+12	32	Jibocum
+12	32	Jobocum
+12	32	Kejauê
+12	32	Lerô
+12	32	Lerum
+12	32	Omí
+12	32	Onifan
+12	32	Omã
+12	32	Oromí
+12	32	Omilá
+12	32	Obí
+12	32	Obí-omi
+12	32	Taladê
+12	32	Talabí

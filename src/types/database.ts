@@ -109,6 +109,8 @@ export interface Orumale {
 
   qualidade_id: UUID | null;
 
+  sobrenome_orisa_id?: UUID | null;
+
   digina: string | null;
 
   data_feitura: string | null;
