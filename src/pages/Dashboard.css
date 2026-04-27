@@ -448,6 +448,12 @@
   margin: 0;
 }
 
+.dash-split-main__bar-actions {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
 .dash-form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -902,6 +908,30 @@
   margin-top: 0.75rem;
 }
 
+.dash-ok {
+  margin: 0.4rem 0 0;
+  color: #1e7a46;
+}
+
+.dash-history-list {
+  margin: 0.75rem 0;
+  padding-left: 1.1rem;
+}
+
+.dash-history-list li {
+  margin: 0.35rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.dash-history-list__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .dash-table--cobrancas .dash-th-sort {
   display: inline-flex;
   align-items: center;
@@ -1118,5 +1148,112 @@
 @media (max-width: 767px) {
   .dash-event-type-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dash-split-main__bar-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
+/* Layout dedicado para impressão do perfil de membro. */
+.perfil-impressao {
+  display: none;
+}
+
+.perfil-cabecalho {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.perfil-cabecalho h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.8rem;
+}
+
+.perfil-cabecalho__dados p {
+  margin: 0.25rem 0;
+}
+
+.perfil-cabecalho__foto {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.perfil-bloco {
+  margin-bottom: 0.9rem;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.perfil-bloco h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.perfil-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.perfil-grid--4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.perfil-card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.perfil-card p,
+.perfil-lista li {
+  margin: 0.2rem 0;
+}
+
+@media print {
+  nav,
+  header,
+  footer,
+  .sidebar,
+  .btn-imprimir,
+  .no-print,
+  .dash-toast,
+  .dash-modal-overlay,
+  .dash-split-main,
+  .dash-section-header,
+  .dash-filtros-mobile {
+    display: none !important;
+  }
+
+  .perfil-impressao {
+    display: block !important;
+    padding: 0;
+  }
+
+  .perfil-cabecalho {
+    page-break-after: avoid;
+  }
+
+  .perfil-bloco {
+    page-break-inside: avoid;
+  }
+
+  .perfil-secao-principal {
+    page-break-before: auto;
+  }
+
+  body {
+    font-size: 12pt;
+    color: #000;
+    background: #fff;
   }
 }

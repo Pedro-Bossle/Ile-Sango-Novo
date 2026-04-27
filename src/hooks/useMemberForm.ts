@@ -3,11 +3,15 @@ import { fetchOrixas } from '../services/orixasQualidades';
 import { fetchPessoaCompleta, savePessoaCompleta, type MemberFormPayload } from '../services/membros';
 import type { Orixa, UUID } from '../types/database';
 import { emptyCadastro, type CadastroFormState } from '../types/memberForm';
+import { somenteDigitosTelefone } from '../utils/telefone';
 
 export type { CadastroFormState };
 
 function newKey(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+  const base =
+    typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : String(Date.now() + Math.random());
+  // Prefixo permite distinguir linhas novas (ainda sem id persistido) das já salvas.
+  return `new-${base}`;
 }
 
 /** Valores do Supabase/form podem não ser string; evita .trim() em null/número */
@@ -18,6 +22,7 @@ function str(v: unknown): string {
 
 export type OrumaleFormRow = {
   key: string;
+  id?: string | null;
   orixa_id: string;
   qualidade_id: string;
   sobrenome_orisa_id: string;
@@ -154,7 +159,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
         setDataNascimento(p.data_nascimento ?? '');
 
-        setContato(p.contato ?? '');
+        // Estado interno mantém telefone sem máscara para persistir somente dígitos.
+        setContato(somenteDigitosTelefone(p.contato));
 
         setEmail(p.email ?? '');
 
@@ -213,6 +219,7 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
           c.orumale.map((r) => ({
 
             key: r.id,
+            id: r.id,
 
             orixa_id: r.orixa_id ?? '',
 
@@ -453,6 +460,7 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
         .filter((r) => str(r.orixa_id))
 
         .map((r) => ({
+          id: r.id ?? (r.key.startsWith('new-') ? null : r.key),
 
           orixa_id: r.orixa_id,
 

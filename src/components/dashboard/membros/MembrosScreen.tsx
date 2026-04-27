@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchPessoasLista, deletePessoa } from '../../../services/membros';
+import { fetchPessoasLista, deletePessoa, fetchReferenciasPerfilMembro } from '../../../services/membros';
 import {
   deleteCobranca,
   fetchCobrancasComMembros,
@@ -20,6 +20,12 @@ import { UmbandaSection } from './UmbandaSection';
 import { CobrancaForm, type CobrancaFormValues } from '../cobrancas/CobrancaForm';
 import { CobrancasReadOnlySummary } from './CobrancasReadOnlySummary';
 import type { PessoaListaItem } from '../../../services/membros';
+import { PerfilImpressao } from './PerfilImpressao';
+import { formatarTelefoneMascara, somenteDigitosTelefone } from '../../../utils/telefone';
+import { fetchHistoricoOrumale, type HistoricoOrumaleItem } from '../../../services/orumaleHistorico';
+import { gerarPdfPerfil } from '../../../services/gerarPdfPerfil';
+import { carregarLogoBase64 } from '../../../utils/logoBase64';
+import { formatDateBR } from '../../../utils/formatDate';
 
 const BUSCA_MEMBROS_PLACEHOLDER = 'Pesquisar por nome, orisá de cabeça ou telefone';
 
@@ -37,6 +43,10 @@ export function MembrosScreen() {
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<UUID | null>(null);
   const [busca, setBusca] = useState('');
+  const [qualidadeNomeById, setQualidadeNomeById] = useState<Record<string, string>>({});
+  const [sobrenomeNomeById, setSobrenomeNomeById] = useState<Record<string, string>>({});
+  const [historicoOrumaleById, setHistoricoOrumaleById] = useState<Record<string, HistoricoOrumaleItem[]>>({});
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const reloadAll = useCallback(async () => {
     setLoadingLista(true);
@@ -106,7 +116,12 @@ export function MembrosScreen() {
   const listaFiltrada = useMemo(() => {
     const q = busca.trim().toLowerCase();
     if (!q) return lista;
-    return lista.filter((m) => `${m.nome} ${m.contato ?? ''} ${m.orixa_cabeca_nome ?? ''}`.toLowerCase().includes(q));
+    const qDigitos = somenteDigitosTelefone(q);
+    return lista.filter((m) => {
+      const base = `${m.nome} ${m.contato ?? ''} ${m.orixa_cabeca_nome ?? ''}`.toLowerCase();
+      const contatoDigits = somenteDigitosTelefone(m.contato);
+      return base.includes(q) || (qDigitos.length > 0 && contatoDigits.includes(qDigitos));
+    });
   }, [lista, busca]);
 
   const openCreate = () => {
@@ -145,10 +160,170 @@ export function MembrosScreen() {
   ) => {
     if (field === 'nome') form.setNome(value);
     if (field === 'dataNascimento') form.setDataNascimento(value);
-    if (field === 'contato') form.setContato(value);
+    if (field === 'contato') form.setContato(somenteDigitosTelefone(value));
     if (field === 'email') form.setEmail(value);
     if (field === 'signo') form.setSigno(value);
     if (field === 'obs') form.setObs(value);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    // Reúne referências de IDs para imprimir nomes em vez de IDs na versão de impressão.
+    const qualidadeIds = [
+      form.cadastro.qualidade_cabeca_id,
+      form.cadastro.qualidade_corpo_id,
+      form.cadastro.qualidade_passagem_id,
+      form.cadastro.qualidade_saida_id,
+      ...form.orumale.map((r) => r.qualidade_id),
+    ];
+    const sobrenomeIds = [
+      form.cadastro.sobrenome_orisa_cabeca_id,
+      form.cadastro.sobrenome_orisa_corpo_id,
+      form.cadastro.sobrenome_orisa_passagem_id,
+      form.cadastro.sobrenome_orisa_saida_id,
+      ...form.orumale.map((r) => r.sobrenome_orisa_id),
+    ];
+
+    void fetchReferenciasPerfilMembro(qualidadeIds, sobrenomeIds)
+      .then((refs) => {
+        if (!cancelled) {
+          setQualidadeNomeById(refs.qualidades);
+          setSobrenomeNomeById(refs.sobrenomes);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQualidadeNomeById({});
+          setSobrenomeNomeById({});
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [form.cadastro, form.orumale]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = form.orumale.map((r) => String(r.id ?? '')).filter(Boolean);
+    if (ids.length === 0) {
+      setHistoricoOrumaleById({});
+      return;
+    }
+    void Promise.all(ids.map((id) => fetchHistoricoOrumale(id).then((items) => ({ id, items }))))
+      .then((pairs) => {
+        if (cancelled) return;
+        const map: Record<string, HistoricoOrumaleItem[]> = {};
+        for (const pair of pairs) map[pair.id] = pair.items;
+        setHistoricoOrumaleById(map);
+      })
+      .catch(() => {
+        if (!cancelled) setHistoricoOrumaleById({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [form.orumale]);
+
+  const handleSalvarPdf = () => {
+    setPdfLoading(true);
+    void carregarLogoBase64()
+      .then(async (logoBase64) => {
+        // Recarrega referências no momento do clique para evitar nomes desatualizados no PDF.
+        const qualidadeIds = [
+          form.cadastro.qualidade_cabeca_id,
+          form.cadastro.qualidade_corpo_id,
+          form.cadastro.qualidade_passagem_id,
+          form.cadastro.qualidade_saida_id,
+          ...form.orumale.map((r) => r.qualidade_id),
+        ];
+        const sobrenomeIds = [
+          form.cadastro.sobrenome_orisa_cabeca_id,
+          form.cadastro.sobrenome_orisa_corpo_id,
+          form.cadastro.sobrenome_orisa_passagem_id,
+          form.cadastro.sobrenome_orisa_saida_id,
+          ...form.orumale.map((r) => r.sobrenome_orisa_id),
+        ];
+        const refs = await fetchReferenciasPerfilMembro(qualidadeIds, sobrenomeIds);
+        return { logoBase64, refs };
+      })
+      .then(({ logoBase64, refs }) => {
+        const orixaNomeById = new Map(form.orixas.map((o) => [String(o.id), o.nome]));
+        const toBloco = (orixaId: string, qualidadeId: string, sobrenomeId: string, digina: string, reza: string) => ({
+          orisa: orixaNomeById.get(String(orixaId)) ?? '—',
+          qualidade: refs.qualidades[String(qualidadeId)] ?? '—',
+          sobrenome: refs.sobrenomes[String(sobrenomeId)] ?? '—',
+          digina: digina || '—',
+          reza: reza || '—',
+        });
+        const orunmila = form.orumale.map((row) => ({
+          orisa: orixaNomeById.get(String(row.orixa_id)) ?? '—',
+          qualidade: refs.qualidades[String(row.qualidade_id)] ?? '—',
+          sobrenome: refs.sobrenomes[String(row.sobrenome_orisa_id)] ?? '—',
+          digina: row.digina || '—',
+          feitura: formatDateBR(row.data_feitura),
+          historico: (row.id ? historicoOrumaleById[row.id] ?? [] : []).map((h) => ({
+            data: formatDateBR(h.data),
+            descricao: h.descricao,
+          })),
+        }));
+        const cobrancasPdf = cobrancasDoPerfil.map((c) => ({
+          nome: c.membro_nome || form.nome || '—',
+          data: formatDateBR(c.vencimento ?? null),
+          descricao: c.descricao || c.tipo || 'Sem descrição',
+          valor: Number(c.valor_total ?? c.valor ?? 0),
+        }));
+        const totalDevido = cobrancasPdf.reduce((acc, c) => acc + c.valor, 0);
+
+        gerarPdfPerfil({
+          nome: form.nome || '—',
+          nascimento: formatDateBR(form.dataNascimento),
+          signo: form.signo || '—',
+          telefone: formatarTelefoneMascara(form.contato),
+          email: form.email || '—',
+          observacoes: form.obs || '—',
+          cabeca: toBloco(
+            form.cadastro.orixa_cabeca_id,
+            form.cadastro.qualidade_cabeca_id,
+            form.cadastro.sobrenome_orisa_cabeca_id,
+            form.cadastro.digina_cabeca,
+            form.cadastro.orixa_cabeca_reza,
+          ),
+          corpo: toBloco(
+            form.cadastro.orixa_corpo_id,
+            form.cadastro.qualidade_corpo_id,
+            form.cadastro.sobrenome_orisa_corpo_id,
+            form.cadastro.digina_corpo,
+            form.cadastro.orixa_corpo_reza,
+          ),
+          passagem: toBloco(
+            form.cadastro.orixa_passagem_id,
+            form.cadastro.qualidade_passagem_id,
+            form.cadastro.sobrenome_orisa_passagem_id,
+            form.cadastro.digina_passagem,
+            form.cadastro.orixa_passagem_reza,
+          ),
+          saida: toBloco(
+            form.cadastro.orixa_saida_id,
+            form.cadastro.qualidade_saida_id,
+            form.cadastro.sobrenome_orisa_saida_id,
+            form.cadastro.digina_saida,
+            form.cadastro.orixa_saida_reza,
+          ),
+          orunmila,
+          exus: form.exus.map((e) => ({ nome: e.exu_nome || '—', feitura: formatDateBR(e.data_feitura) })),
+          entidades: form.umbanda.map((u) => ({ nome: u.umbanda_nome || '—', feitura: formatDateBR(u.data_feitura) })),
+          cobrancas: cobrancasPdf,
+          totalDevido,
+          logoBase64,
+        });
+      })
+      .catch((e) => {
+        setToast({ msg: e instanceof Error ? e.message : 'Erro ao gerar PDF.', variant: 'error' });
+      })
+      .finally(() => {
+        setPdfLoading(false);
+      });
   };
 
   if (view === 'form') {
@@ -162,9 +337,19 @@ export function MembrosScreen() {
             </button>
             <h1 className="dash-split-main__title">{editId ? 'Editar membro' : 'Novo membro'}</h1>
             {editId && (
-              <button type="button" className="dash-btn-danger-outline" onClick={() => setDeleteConfirm(editId)}>
-                Excluir membro
-              </button>
+              <div className="dash-split-main__bar-actions no-print">
+                <button
+                  type="button"
+                  className="dash-btn-secondary btn-imprimir"
+                  onClick={handleSalvarPdf}
+                  disabled={pdfLoading}
+                >
+                  {pdfLoading ? 'Gerando PDF…' : '🖨 Salvar PDF'}
+                </button>
+                <button type="button" className="dash-btn-danger-outline" onClick={() => setDeleteConfirm(editId)}>
+                  Excluir membro
+                </button>
+              </div>
             )}
           </div>
 
@@ -229,6 +414,22 @@ export function MembrosScreen() {
             </form>
           )}
         </div>
+        <PerfilImpressao
+          nome={form.nome}
+          dataNascimento={form.dataNascimento}
+          contatoFormatado={formatarTelefoneMascara(form.contato)}
+          email={form.email}
+          signo={form.signo}
+          obs={form.obs}
+          orixas={form.orixas}
+          cadastro={form.cadastro}
+          orumale={form.orumale}
+          exus={form.exus}
+          umbanda={form.umbanda}
+          cobrancas={cobrancasDoPerfil}
+          qualidadeNomeById={qualidadeNomeById}
+          sobrenomeNomeById={sobrenomeNomeById}
+        />
 
         <CobrancaForm
           open={cobrancaFormOpen}
@@ -324,7 +525,7 @@ export function MembrosScreen() {
                 return (
                   <tr key={m.id}>
                     <td>{m.nome}</td>
-                    <td>{m.contato || '—'}</td>
+                    <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
                     <td>{m.orixa_cabeca_nome || '—'}</td>
                     <td>
                       <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>

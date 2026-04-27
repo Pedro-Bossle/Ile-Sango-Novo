@@ -1,20 +1,20 @@
 {
   "files": {
-    "main.css": "/static/css/main.b1c985f7.css",
-    "main.js": "/static/js/main.11ecceae.js",
+    "main.css": "/static/css/main.5c34cef4.css",
+    "main.js": "/static/js/main.2893054a.js",
     "static/js/239.f45e2180.chunk.js": "/static/js/239.f45e2180.chunk.js",
     "static/js/977.832adc85.chunk.js": "/static/js/977.832adc85.chunk.js",
     "static/js/732.b72cba4a.chunk.js": "/static/js/732.b72cba4a.chunk.js",
     "static/media/xango_e_oxum_banner.png": "/static/media/xango_e_oxum_banner.a99211ac362941c7281d.png",
     "index.html": "/index.html",
-    "main.b1c985f7.css.map": "/static/css/main.b1c985f7.css.map",
-    "main.11ecceae.js.map": "/static/js/main.11ecceae.js.map",
+    "main.5c34cef4.css.map": "/static/css/main.5c34cef4.css.map",
+    "main.2893054a.js.map": "/static/js/main.2893054a.js.map",
     "239.f45e2180.chunk.js.map": "/static/js/239.f45e2180.chunk.js.map",
     "977.832adc85.chunk.js.map": "/static/js/977.832adc85.chunk.js.map",
     "732.b72cba4a.chunk.js.map": "/static/js/732.b72cba4a.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.b1c985f7.css",
-    "static/js/main.11ecceae.js"
+    "static/css/main.5c34cef4.css",
+    "static/js/main.2893054a.js"
   ]
 }

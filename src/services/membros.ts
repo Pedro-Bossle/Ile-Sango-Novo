@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { somenteDigitosTelefone } from '../utils/telefone';
 
 import type { CadastroOrixas, Exu, Orumale, Orixa, Pessoa, Umbanda, UUID } from '../types/database';
 
@@ -77,6 +78,8 @@ export type MemberFormPayload = {
   };
 
   orumale: Array<{
+
+    id?: string | null;
 
     orixa_id: string;
 
@@ -301,6 +304,10 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
 
   };
 
+  // Persistência padronizada: telefone sempre armazenado sem máscara.
+  const contatoDigits = somenteDigitosTelefone(pessoaRow.contato as string | null | undefined);
+  pessoaRow.contato = contatoDigits || null;
+
 
 
   let pessoaId = pessoa.id;
@@ -449,34 +456,45 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
 
 
 
-  const { error: delO } = await supabase.from('orumale').delete().eq('pessoa_id', pessoaId);
+  const { data: orumaleExistente, error: eOrumaleExistente } = await supabase
+    .from('orumale')
+    .select('id')
+    .eq('pessoa_id', pessoaId);
 
-  if (delO) throw new Error(delO.message);
+  if (eOrumaleExistente) throw new Error(eOrumaleExistente.message);
+
+  const idsExistentes = new Set(((orumaleExistente ?? []) as Array<{ id: string }>).map((r) => r.id));
+  const idsMantidos = new Set<string>();
 
   for (const row of orumale) {
-
     if (!nullIfEmpty(row.orixa_id)) continue;
 
-    const ins = {
-
+    const baseRow = {
       pessoa_id: pessoaId,
-
       orixa_id: row.orixa_id,
-
       qualidade_id: nullIfEmpty(row.qualidade_id) as UUID | null,
-
       sobrenome_orisa_id: nullIfEmpty(row.sobrenome_orisa_id) as UUID | null,
-
       digina: nullIfEmpty(row.digina),
-
       data_feitura: nullIfEmpty(row.data_feitura),
-
     };
 
-    const { error: insE } = await supabase.from('orumale').insert(ins);
+    const rowId = nullIfEmpty(row.id);
+    if (rowId) {
+      const { error: upOrumale } = await supabase.from('orumale').update(baseRow).eq('id', rowId).eq('pessoa_id', pessoaId);
+      if (upOrumale) throw new Error(upOrumale.message);
+      idsMantidos.add(rowId);
+      continue;
+    }
 
-    if (insE) throw new Error(insE.message);
+    const { data: novoOrumale, error: insOrumale } = await supabase.from('orumale').insert(baseRow).select('id').single();
+    if (insOrumale) throw new Error(insOrumale.message);
+    idsMantidos.add((novoOrumale as { id: string }).id);
+  }
 
+  const idsParaExcluir = [...idsExistentes].filter((id) => !idsMantidos.has(id));
+  if (idsParaExcluir.length > 0) {
+    const { error: delOrumale } = await supabase.from('orumale').delete().in('id', idsParaExcluir).eq('pessoa_id', pessoaId);
+    if (delOrumale) throw new Error(delOrumale.message);
   }
 
 
@@ -545,5 +563,50 @@ export async function deletePessoa(id: UUID): Promise<void> {
 
   if (error) throw new Error(error.message);
 
+}
+
+type NomePorId = Record<string, string>;
+
+export type ReferenciasPerfilMembro = {
+  qualidades: NomePorId;
+  sobrenomes: NomePorId;
+};
+
+/**
+ * Carrega nomes de qualidade/sobrenome por ID para exibição no perfil/print sem
+ * depender de múltiplas consultas por linha.
+ */
+export async function fetchReferenciasPerfilMembro(
+  qualidadeIds: Array<string | number | null | undefined>,
+  sobrenomeIds: Array<string | number | null | undefined>,
+): Promise<ReferenciasPerfilMembro> {
+  // Aceita ids numéricos, string ou null sem lançar erro em tempo de execução.
+  const qualidadesClean = [...new Set(qualidadeIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
+  const sobrenomesClean = [...new Set(sobrenomeIds.map((id) => String(id ?? '').trim()).filter(Boolean))];
+  const qualidadesComoNumero = qualidadesClean.map((id) => Number(id)).filter((n) => !Number.isNaN(n));
+
+  const [qualidadesRes, sobrenomesRes] = await Promise.all([
+    qualidadesComoNumero.length
+      ? supabase.from('qualidades').select('id, nome').in('id', qualidadesComoNumero)
+      : Promise.resolve({ data: [], error: null }),
+    sobrenomesClean.length
+      ? supabase.from('sobrenomes_orisa').select('id, nome').in('id', sobrenomesClean)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (qualidadesRes.error) throw new Error(qualidadesRes.error.message);
+  if (sobrenomesRes.error) throw new Error(sobrenomesRes.error.message);
+
+  const qualidades: NomePorId = {};
+  for (const row of (qualidadesRes.data ?? []) as Array<{ id: string | number; nome: string }>) {
+    qualidades[String(row.id)] = row.nome;
+  }
+
+  const sobrenomes: NomePorId = {};
+  for (const row of (sobrenomesRes.data ?? []) as Array<{ id: string | number; nome: string }>) {
+    sobrenomes[String(row.id)] = row.nome;
+  }
+
+  return { qualidades, sobrenomes };
 }
 
