@@ -32,6 +32,7 @@ const RedefinirSenha = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  const [authFlowType, setAuthFlowType] = useState('recovery');
 
   useEffect(() => {
     let mounted = true;
@@ -40,6 +41,21 @@ const RedefinirSenha = () => {
       setError('');
       const currentUrl = new URL(window.location.href);
       const code = currentUrl.searchParams.get('code');
+      const queryType = currentUrl.searchParams.get('type');
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const hashType = hashParams.get('type');
+      const flowType = queryType || hashType || '';
+      const isAllowedAuthFlow = flowType === 'recovery' || flowType === 'invite';
+      const hasExplicitDisallowedType = Boolean(flowType) && !isAllowedAuthFlow;
+      const hasRecoveryLikeSignal = Boolean(code) || isAllowedAuthFlow;
+
+      if (hasExplicitDisallowedType || !hasRecoveryLikeSignal) {
+        if (mounted) {
+          setError('Link de redefinicao invalido ou expirado. Solicite outro email.');
+          setReady(false);
+        }
+        return;
+      }
 
       if (code) {
         const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
@@ -61,7 +77,10 @@ const RedefinirSenha = () => {
         return;
       }
 
-      if (mounted) setReady(true);
+      if (mounted) {
+        setAuthFlowType(flowType === 'invite' ? 'invite' : 'recovery');
+        setReady(true);
+      }
     }
 
     prepareRecoverySession();
@@ -101,7 +120,11 @@ const RedefinirSenha = () => {
       return;
     }
 
-    setMessage('Senha atualizada com sucesso. Voce ja pode fazer login.');
+    setMessage(
+      authFlowType === 'invite'
+        ? 'Convite aceito com sucesso. Sua senha foi cadastrada e voce ja pode fazer login.'
+        : 'Senha atualizada com sucesso. Voce ja pode fazer login.'
+    );
     setLoading(false);
     setTimeout(() => navigate('/login'), 1200);
   };
@@ -109,8 +132,12 @@ const RedefinirSenha = () => {
   return (
     <section className="auth-page">
       <form className="auth-card" onSubmit={handleUpdatePassword}>
-        <h2>Redefinir senha</h2>
-        <p>Digite sua nova senha para concluir.</p>
+        <h2>{authFlowType === 'invite' ? 'Aceitar convite' : 'Redefinir senha'}</h2>
+        <p>
+          {authFlowType === 'invite'
+            ? 'Defina sua senha para concluir o acesso ao sistema.'
+            : 'Digite sua nova senha para concluir.'}
+        </p>
 
         <label htmlFor="nova-senha">Nova senha</label>
         <div className="auth-password-row">
@@ -155,7 +182,7 @@ const RedefinirSenha = () => {
         </div>
 
         <button className="auth-button" type="submit" disabled={loading}>
-          {loading ? 'Salvando...' : 'Atualizar senha'}
+          {loading ? 'Salvando...' : authFlowType === 'invite' ? 'Cadastrar senha' : 'Atualizar senha'}
         </button>
 
         {message && <p className="auth-message">{message}</p>}

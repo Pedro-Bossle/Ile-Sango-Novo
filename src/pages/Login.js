@@ -28,8 +28,20 @@ function getMensagemErroAuth(errorMessage) {
       'desative VPN temporariamente e confirme se REACT_APP_SUPABASE_URL no .env.local coincide com o URL do projeto no painel do Supabase.'
     );
   }
+  if (msg.includes('redirect') || msg.includes('invalid request')) {
+    return (
+      'Nao foi possivel enviar o email de redefinicao por configuracao de redirecionamento. ' +
+      'Verifique no Supabase se a URL de redefinicao esta autorizada em Authentication > URL Configuration.'
+    );
+  }
 
   return 'Nao foi possivel concluir a acao agora. Tente novamente em instantes.';
+}
+
+function getPasswordResetRedirectUrl() {
+  const configured = process.env.REACT_APP_PASSWORD_RESET_REDIRECT_URL?.trim();
+  if (configured) return configured;
+  return `${window.location.origin}/redefinir-senha`;
 }
 
 const Login = () => {
@@ -75,7 +87,7 @@ const Login = () => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-      redirectTo: `${window.location.origin}/redefinir-senha`,
+      redirectTo: getPasswordResetRedirectUrl(),
     });
 
     if (resetError) {
