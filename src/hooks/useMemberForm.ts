@@ -198,6 +198,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
           digina_cabeca: cad?.digina_cabeca ?? '',
 
+          data_feitura_bori: cad?.data_feitura_bori ?? '',
+
           digina_corpo: cad?.digina_corpo ?? '',
 
           digina_passagem: cad?.digina_passagem ?? '',
@@ -705,6 +707,9 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
     submit,
 
     setError,
+
+    // Permite limpar tudo ao iniciar um novo cadastro sem depender de mudança de editId.
+    resetForm: resetEmpty,
 
   };
 

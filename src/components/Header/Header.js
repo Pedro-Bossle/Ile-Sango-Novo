@@ -31,7 +31,7 @@ const Header = () => {
             <nav className={`header-nav ${menuAberto ? 'open' : ''}`}>
                 <NavLink className="header-menu" to="/" onClick={handleCloseMenu}>Início</NavLink>
                 <NavLink className="header-menu" to="/sobre" onClick={handleCloseMenu}>Sobre Nós</NavLink>
-                <NavLink className="header-menu" to="/eventos" onClick={handleCloseMenu}>Calendário</NavLink>
+                <NavLink className="header-menu" to="/eventos" onClick={handleCloseMenu}>Eventos</NavLink>
                 <NavLink className="header-menu" to="/catalogo" onClick={handleCloseMenu}>Catálogo</NavLink>
                 <NavLink className="header-menu" to="/cultos" onClick={handleCloseMenu}>Cultos</NavLink>
                 <NavLink className="header-menu" to="/contato" onClick={handleCloseMenu}>Contato</NavLink>

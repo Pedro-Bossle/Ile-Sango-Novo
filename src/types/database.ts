@@ -81,6 +81,8 @@ export interface CadastroOrixas {
 
   digina_cabeca?: string | null;
 
+  data_feitura_bori?: string | null;
+
   digina_corpo?: string | null;
 
   digina_passagem?: string | null;

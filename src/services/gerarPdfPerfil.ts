@@ -8,7 +8,7 @@ export interface DadosPdfMembro {
   telefone: string;
   email: string;
   observacoes?: string;
-  cabeca: { orisa: string; qualidade: string; sobrenome: string; digina: string; reza: string };
+  cabeca: { orisa: string; qualidade: string; sobrenome: string; digina: string; reza: string; dataBori?: string };
   corpo: { orisa: string; qualidade: string; sobrenome: string; digina: string; reza: string };
   passagem: { orisa: string; qualidade: string; sobrenome: string; digina: string; reza: string };
   saida: { orisa: string; qualidade: string; sobrenome: string; digina: string; reza: string };
@@ -149,6 +149,9 @@ export const gerarPdfPerfil = (dados: DadosPdfMembro): void => {
       { label: 'Sobrenome:', valor: bloco.dados.sobrenome },
       { label: 'Digina:', valor: bloco.dados.digina },
     ]);
+    if (bloco.titulo === 'Cabeça') {
+      linhaLabel([{ label: 'Data de Bori:', valor: dados.cabeca.dataBori || '—' }]);
+    }
     linhaLabel([{ label: 'Reza:', valor: bloco.dados.reza }]);
     // Espaço extra entre blocos de Orisás para leitura mais confortável.
     y += 3;

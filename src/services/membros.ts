@@ -61,6 +61,8 @@ export type MemberFormPayload = {
 
     digina_cabeca: string;
 
+    data_feitura_bori: string;
+
     digina_corpo: string;
 
     digina_passagem: string;
@@ -360,6 +362,8 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
 
     hasText(cadastro.digina_cabeca) ||
 
+    hasText(cadastro.data_feitura_bori) ||
+
     hasText(cadastro.digina_corpo) ||
 
     hasText(cadastro.digina_passagem) ||
@@ -431,6 +435,8 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
       orixa_saida_reza: nullIfEmpty(cadastro.orixa_saida_reza),
 
       digina_cabeca: nullIfEmpty(cadastro.digina_cabeca),
+
+      data_feitura_bori: nullIfEmpty(cadastro.data_feitura_bori),
 
       digina_corpo: nullIfEmpty(cadastro.digina_corpo),
 

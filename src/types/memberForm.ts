@@ -16,6 +16,7 @@ export type CadastroFormState = {
   orixa_passagem_reza: string;
   orixa_saida_reza: string;
   digina_cabeca: string;
+  data_feitura_bori: string;
   digina_corpo: string;
   digina_passagem: string;
   digina_saida: string;
@@ -39,6 +40,7 @@ export const emptyCadastro = (): CadastroFormState => ({
   orixa_passagem_reza: '',
   orixa_saida_reza: '',
   digina_cabeca: '',
+  data_feitura_bori: '',
   digina_corpo: '',
   digina_passagem: '',
   digina_saida: '',

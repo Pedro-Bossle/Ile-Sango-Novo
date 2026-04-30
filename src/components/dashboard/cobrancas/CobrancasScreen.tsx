@@ -18,6 +18,7 @@ import { gerarPdfRelatorio, type LinhaRelatorio } from '../../../utils/pdfRelato
 import { Toast } from '../Toast';
 import { CobrancaForm, type CobrancaFormValues } from './CobrancaForm';
 import { CobrancasTable } from './CobrancasTable';
+import { PaginationControls } from '../PaginationControls';
 
 export function CobrancasScreen() {
   const [rows, setRows] = useState<CobrancaComMembro[]>([]);
@@ -31,6 +32,8 @@ export function CobrancasScreen() {
   const [buscaMembro, setBuscaMembro] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem('cobrancas_page_size') || '20'));
   const [bulkValues, setBulkValues] = useState<{
     tipo: CobrancaFormValues['tipo'];
     data: string;
@@ -74,6 +77,25 @@ export function CobrancasScreen() {
     return list;
   }, [rows, periodoAplicado, buscaMembro]);
 
+  const totalCobrancas = filtered.length;
+  const cobrancasPaginadas = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, page, pageSize]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(totalCobrancas / pageSize));
+    if (page > totalPages) setPage(totalPages);
+  }, [totalCobrancas, page, pageSize]);
+
+  useEffect(() => {
+    localStorage.setItem('cobrancas_page_size', String(pageSize));
+  }, [pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [buscaMembro, periodoAplicado?.de, periodoAplicado?.ate]);
+
   /** Soma dos saldos em aberto respeitando a mesma lista filtrada da tabela (período + nome). */
   const subtotalAberto = useMemo(() => {
     return filtered.filter((c) => isCobrancaPendente(c)).reduce((a, c) => a + valorSaldoCobranca(c), 0);
@@ -111,6 +133,7 @@ export function CobrancasScreen() {
     setRascunhoPeriodo(filtroPeriodoVazio());
     setPeriodoAplicado(null);
     setBuscaMembro('');
+    setPage(1);
   };
 
   const openNovo = () => {
@@ -340,10 +363,20 @@ export function CobrancasScreen() {
         <p>Carregando…</p>
       ) : (
         <>
-          <CobrancasTable rows={filtered} onEdit={openEdit} onDelete={setDeleteTarget} onRefresh={reload} />
+          <CobrancasTable rows={cobrancasPaginadas} onEdit={openEdit} onDelete={setDeleteTarget} onRefresh={reload} />
           <p className="dash-cob-subtotal" role="status">
             <strong>Subtotal em aberto (filtros atuais):</strong> {formatBRL(subtotalAberto)}
           </p>
+          <PaginationControls
+            totalItems={totalCobrancas}
+            currentPage={page}
+            pageSize={pageSize}
+            onPageChange={(p) => {
+              setPage(p);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onPageSizeChange={setPageSize}
+          />
         </>
       )}
 

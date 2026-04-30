@@ -186,6 +186,19 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
         </label>
       </div>
 
+      {section === 'cabeca' && (
+        <div className="dash-orisa-quad__row2">
+          <label className="dash-field">
+            <span>Data de Feitura de Bori</span>
+            <input
+              type="date"
+              value={String(cadastro.data_feitura_bori ?? '')}
+              onChange={(e) => setCadastroField('data_feitura_bori', e.target.value)}
+            />
+          </label>
+        </div>
+      )}
+
       <label className="dash-field dash-field--full dash-orixa-reza">
         <span>Reza</span>
         <textarea

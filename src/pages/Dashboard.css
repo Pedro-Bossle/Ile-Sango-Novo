@@ -81,6 +81,7 @@
 }
 
 .dash-form input,
+.dash-form select,
 .dash-form textarea,
 .dash-form button,
 .dash-filtros input,
@@ -89,12 +90,30 @@
   border-radius: 8px;
   padding: 0.65rem 0.75rem;
   font-size: 0.95rem;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .dash-form textarea {
   min-height: 90px;
   resize: vertical;
   font-family: inherit;
+}
+
+/* Modal de evento: campos com altura uniforme e melhor alinhamento visual. */
+.dash-form--evento-modal input,
+.dash-form--evento-modal select {
+  min-height: 44px;
+}
+
+.dash-form--evento-modal .dash-field {
+  margin: 0;
+}
+
+.dash-form--evento-modal .dash-form-actions {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .dash-form button {
@@ -149,6 +168,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(240px, 1fr));
   gap: 0.8rem;
+  align-items: stretch;
 }
 
 .dash-card {
@@ -156,11 +176,18 @@
   border: 1px solid #e1d9d1;
   border-radius: 10px;
   padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .dash-card h3 {
   margin: 0 0 0.5rem;
   color: var(--bordo);
+}
+
+.dash-card p {
+  margin: 0 0 0.4rem;
 }
 
 .dash-big {
@@ -171,14 +198,19 @@
 .dash-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.6rem;
+  margin-top: auto;
+  padding-top: 0.35rem;
 }
 
 .dash-actions button {
   border: 1px solid var(--cinza);
   background: var(--branco-puro);
   border-radius: 8px;
-  padding: 0.45rem 0.6rem;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.45rem 0.75rem;
+  font-weight: 600;
+  color: var(--bordo);
   cursor: pointer;
 }
 
@@ -906,6 +938,65 @@
 
 .dash-cob-resumo-subtotal {
   margin-top: 0.75rem;
+}
+
+.dash-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.9rem;
+}
+
+.dash-pagination__summary {
+  margin: 0;
+  color: #555;
+}
+
+.dash-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dash-pagination__page-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.dash-pagination__page-size select {
+  min-height: 36px;
+  border: 1px solid #c9c4bf;
+  border-radius: 8px;
+  padding: 0.3rem 0.5rem;
+}
+
+.dash-pagination__pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dash-pagination__page {
+  min-width: 36px;
+  min-height: 36px;
+  border: 1px solid #c9c4bf;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.dash-pagination__page.is-active {
+  background: var(--bordo);
+  color: #fff;
+  border-color: var(--bordo);
+}
+
+.dash-pagination__ellipsis {
+  padding: 0 0.2rem;
 }
 
 .dash-ok {

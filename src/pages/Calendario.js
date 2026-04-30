@@ -5,9 +5,9 @@ const Calendario = () => {
   return (
     <>
       <PageMeta
-        title="Calendário"
+        title="Eventos"
         path="/eventos"
-        description="Calendário de eventos e giras do Ilê Sàngó Aganjù e Oṣun Pandá."
+        description="Eventos e giras do Ilê Sàngó Aganjù e Oṣun Pandá."
       />
       <Eventos modo="calendario" />
     </>

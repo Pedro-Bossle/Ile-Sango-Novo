@@ -26,6 +26,7 @@ import { fetchHistoricoOrumale, type HistoricoOrumaleItem } from '../../../servi
 import { gerarPdfPerfil } from '../../../services/gerarPdfPerfil';
 import { carregarLogoBase64 } from '../../../utils/logoBase64';
 import { formatDateBR } from '../../../utils/formatDate';
+import { PaginationControls } from '../PaginationControls';
 
 const BUSCA_MEMBROS_PLACEHOLDER = 'Pesquisar por nome, orisá de cabeça ou telefone';
 
@@ -47,6 +48,8 @@ export function MembrosScreen() {
   const [sobrenomeNomeById, setSobrenomeNomeById] = useState<Record<string, string>>({});
   const [historicoOrumaleById, setHistoricoOrumaleById] = useState<Record<string, HistoricoOrumaleItem[]>>({});
   const [pdfLoading, setPdfLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem('membros_page_size') || '20'));
 
   const reloadAll = useCallback(async () => {
     setLoadingLista(true);
@@ -124,8 +127,29 @@ export function MembrosScreen() {
     });
   }, [lista, busca]);
 
+  const totalMembros = listaFiltrada.length;
+  const membrosPaginados = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return listaFiltrada.slice(start, start + pageSize);
+  }, [listaFiltrada, page, pageSize]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(totalMembros / pageSize));
+    if (page > totalPages) setPage(totalPages);
+  }, [totalMembros, page, pageSize]);
+
+  useEffect(() => {
+    localStorage.setItem('membros_page_size', String(pageSize));
+  }, [pageSize]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [busca]);
+
   const openCreate = () => {
     setEditId(null);
+    // Evita reaproveitar estado do último cadastro quando editId já era null.
+    form.resetForm();
     setView('form');
   };
 
@@ -146,7 +170,11 @@ export function MembrosScreen() {
   const handleDelete = async (id: UUID) => {
     try {
       await deletePessoa(id);
-      setDeleteConfirm(null);
+      if (String(editId) === String(id)) {
+        backToList();
+      } else {
+        setDeleteConfirm(null);
+      }
       await reloadAll();
       setToast({ msg: 'Membro excluído.', variant: 'success' });
     } catch (e) {
@@ -282,13 +310,16 @@ export function MembrosScreen() {
           telefone: formatarTelefoneMascara(form.contato),
           email: form.email || '—',
           observacoes: form.obs || '—',
-          cabeca: toBloco(
-            form.cadastro.orixa_cabeca_id,
-            form.cadastro.qualidade_cabeca_id,
-            form.cadastro.sobrenome_orisa_cabeca_id,
-            form.cadastro.digina_cabeca,
-            form.cadastro.orixa_cabeca_reza,
-          ),
+          cabeca: {
+            ...toBloco(
+              form.cadastro.orixa_cabeca_id,
+              form.cadastro.qualidade_cabeca_id,
+              form.cadastro.sobrenome_orisa_cabeca_id,
+              form.cadastro.digina_cabeca,
+              form.cadastro.orixa_cabeca_reza,
+            ),
+            dataBori: formatDateBR(form.cadastro.data_feitura_bori),
+          },
           corpo: toBloco(
             form.cadastro.orixa_corpo_id,
             form.cadastro.qualidade_corpo_id,
@@ -508,41 +539,53 @@ export function MembrosScreen() {
       {loadingLista ? (
         <p>Carregando…</p>
       ) : (
-        <div className="dash-table-scroll">
-          <table className="dash-table">
-            <thead>
-              <tr>
-                <th>Membro</th>
-                <th>Telefone</th>
-                <th>Orisá cabeça</th>
-                <th>Situação</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {listaFiltrada.map((m) => {
-                const devendo = pessoaEstaDevendo(m.id, cobrancas);
-                return (
-                  <tr key={m.id}>
-                    <td>{m.nome}</td>
-                    <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
-                    <td>{m.orixa_cabeca_nome || '—'}</td>
-                    <td>
-                      <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
-                        {devendo ? 'Devendo' : 'Em dia'}
-                      </span>
-                    </td>
-                    <td>
-                      <button type="button" className="dash-btn-table" onClick={() => openEdit(m.id)}>
-                        Ver perfil
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div className="dash-table-scroll">
+            <table className="dash-table">
+              <thead>
+                <tr>
+                  <th>Membro</th>
+                  <th>Telefone</th>
+                  <th>Orisá cabeça</th>
+                  <th>Situação</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {membrosPaginados.map((m) => {
+                  const devendo = pessoaEstaDevendo(m.id, cobrancas);
+                  return (
+                    <tr key={m.id}>
+                      <td>{m.nome}</td>
+                      <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
+                      <td>{m.orixa_cabeca_nome || '—'}</td>
+                      <td>
+                        <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
+                          {devendo ? 'Devendo' : 'Em dia'}
+                        </span>
+                      </td>
+                      <td>
+                        <button type="button" className="dash-btn-table" onClick={() => openEdit(m.id)}>
+                          Ver perfil
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <PaginationControls
+            totalItems={totalMembros}
+            currentPage={page}
+            pageSize={pageSize}
+            onPageChange={(p) => {
+              setPage(p);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            onPageSizeChange={setPageSize}
+          />
+        </>
       )}
     </>
   );

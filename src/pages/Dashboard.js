@@ -7,6 +7,7 @@ import { MembrosScreen } from '../components/dashboard/membros/MembrosScreen.tsx
 import { CobrancasScreen } from '../components/dashboard/cobrancas/CobrancasScreen.tsx';
 
 const MENUS = ['visao-geral', 'eventos', 'catalogo', 'membros', 'cobrancas'];
+const ENDERECO_EVENTO_PADRAO = 'R. Visc. de Pelotas, 2576 - Pio X, Caxias do Sul - RS, 95020-500';
 
 const defaultEvento = { id: null, nome: '', data: '', hora: '', local: '', descricao: '', tipo: 'umbanda', icone_customizado: null };
 const defaultCatalogo = { id: null, nome: '', categoria: '', valor: '', descricao: '', variacoes: '' };
@@ -61,6 +62,9 @@ const Dashboard = () => {
   const carregarDados = useCallback(async () => {
     setLoading(true);
     setError('');
+    const hojeIso = new Date().toISOString().slice(0, 10);
+    // Exclui automaticamente eventos passados (dia seguinte ao evento em diante).
+    await supabase.from('eventos').delete().lt('data', hojeIso);
 
     const [
       { data: sessao },
@@ -150,7 +154,8 @@ const Dashboard = () => {
       nome: eventoForm.nome,
       data: eventoForm.data,
       hora: eventoForm.hora,
-      local: eventoForm.local,
+      // Se o local ficar vazio, aplica o endereço padrão solicitado.
+      local: String(eventoForm.local ?? '').trim() || ENDERECO_EVENTO_PADRAO,
       descricao: eventoForm.descricao,
       tipo: eventoForm.tipo || 'umbanda',
       icone_customizado: eventoForm.tipo === 'outro' ? eventoForm.icone_customizado || null : null,
@@ -211,6 +216,7 @@ const Dashboard = () => {
     setEventoForm(defaultEvento);
     setMostrarModalEvento(true);
   };
+
 
   const selecionarTipoEvento = (tipo) => {
     setEventoForm((prev) => ({
@@ -460,34 +466,51 @@ const Dashboard = () => {
         <div className="dash-modal-overlay">
           <div className="dash-modal" ref={modalRef}>
             <h2>{eventoForm.id ? 'Editar evento' : 'Adicionar evento'}</h2>
-            <form className="dash-form" onSubmit={salvarEvento}>
-              <input
-                placeholder="Nome"
-                value={eventoForm.nome}
-                onChange={(e) => setEventoForm({ ...eventoForm, nome: e.target.value })}
-                required
-              />
-              <input type="date" value={eventoForm.data} onChange={(e) => setEventoForm({ ...eventoForm, data: e.target.value })} required />
-              <input type="time" value={eventoForm.hora} onChange={(e) => setEventoForm({ ...eventoForm, hora: e.target.value })} required />
-              <input
-                placeholder="Local"
-                value={eventoForm.local}
-                onChange={(e) => setEventoForm({ ...eventoForm, local: e.target.value })}
-                required
-              />
-              <input
-                placeholder="Descricao"
-                value={eventoForm.descricao}
-                onChange={(e) => setEventoForm({ ...eventoForm, descricao: e.target.value })}
-              />
-              <div className="dash-field dash-field--full dash-event-type-wrap">
-                <span>Tipo de Evento</span>
+            <form className="dash-form dash-form--evento-modal" onSubmit={salvarEvento}>
+              <label className="dash-field">
+                <span>Título</span>
+                <input
+                  placeholder="Título"
+                  value={eventoForm.nome}
+                  onChange={(e) => setEventoForm({ ...eventoForm, nome: e.target.value })}
+                  required
+                />
+              </label>
+              <label className="dash-field">
+                <span>Data</span>
+                <input type="date" value={eventoForm.data} onChange={(e) => setEventoForm({ ...eventoForm, data: e.target.value })} required />
+              </label>
+              <label className="dash-field">
+                <span>Horário</span>
+                <input type="time" value={eventoForm.hora} onChange={(e) => setEventoForm({ ...eventoForm, hora: e.target.value })} required />
+              </label>
+              <div className="dash-field dash-event-type-wrap">
+                <span>Tipo do Evento</span>
                 <select value={eventoForm.tipo} onChange={(e) => selecionarTipoEvento(e.target.value)}>
                   <option value="umbanda">Umbanda</option>
                   <option value="quimbanda">Quimbanda</option>
                   <option value="nacao">Nação</option>
                   <option value="outro">Outro</option>
                 </select>
+              </div>
+              <label className="dash-field">
+                <span>Endereço</span>
+                <input
+                  placeholder="Endereço"
+                  value={eventoForm.local}
+                  onChange={(e) => setEventoForm({ ...eventoForm, local: e.target.value })}
+                  aria-label="Endereço do evento"
+                />
+              </label>
+              <label className="dash-field">
+                <span>Descrição</span>
+                <input
+                  placeholder="Descrição"
+                  value={eventoForm.descricao}
+                  onChange={(e) => setEventoForm({ ...eventoForm, descricao: e.target.value })}
+                />
+              </label>
+              <div className="dash-field dash-field--full">
                 {eventoForm.tipo === 'outro' && (
                   <label className="dash-field dash-field--full">
                     <span>Ícone personalizado</span>
@@ -496,14 +519,14 @@ const Dashboard = () => {
                 )}
               </div>
               <div className="dash-form-actions dash-form-actions--modal-end">
+                <button type="button" className="dash-btn-secondary" onClick={() => setMostrarModalEvento(false)}>
+                  Fechar
+                </button>
                 <button type="submit" className="dash-btn-primary">
                   Salvar evento
                 </button>
               </div>
             </form>
-            <button className="dash-close" onClick={() => setMostrarModalEvento(false)}>
-              Fechar
-            </button>
           </div>
         </div>
       )}
