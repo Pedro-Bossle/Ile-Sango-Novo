@@ -31,6 +31,12 @@ import { PaginationControls } from '../PaginationControls';
 const BUSCA_MEMBROS_PLACEHOLDER = 'Pesquisar por nome, orisá de cabeça ou telefone';
 
 type View = 'list' | 'form';
+type SortKey = 'nome' | 'telefone' | 'orixa' | 'situacao';
+
+function defaultDirFor(key: SortKey): 'asc' | 'desc' {
+  if (key === 'situacao') return 'desc';
+  return 'asc';
+}
 
 export function MembrosScreen() {
   const [view, setView] = useState<View>('list');
@@ -50,6 +56,7 @@ export function MembrosScreen() {
   const [pdfLoading, setPdfLoading] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem('membros_page_size') || '20'));
+  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' });
 
   const reloadAll = useCallback(async () => {
     setLoadingLista(true);
@@ -127,11 +134,38 @@ export function MembrosScreen() {
     });
   }, [lista, busca]);
 
-  const totalMembros = listaFiltrada.length;
+  const listaOrdenada = useMemo(() => {
+    const out = [...listaFiltrada];
+    out.sort((a, b) => {
+      const dirMul = sort.dir === 'asc' ? 1 : -1;
+      const statusA = pessoaEstaDevendo(a.id, cobrancas) ? 1 : 0;
+      const statusB = pessoaEstaDevendo(b.id, cobrancas) ? 1 : 0;
+      switch (sort.key) {
+        case 'nome':
+          return dirMul * a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+        case 'telefone':
+          return (
+            dirMul *
+            (somenteDigitosTelefone(a.contato).localeCompare(somenteDigitosTelefone(b.contato), 'pt-BR', {
+              sensitivity: 'base',
+            }))
+          );
+        case 'orixa':
+          return dirMul * (a.orixa_cabeca_nome ?? '').localeCompare(b.orixa_cabeca_nome ?? '', 'pt-BR', { sensitivity: 'base' });
+        case 'situacao':
+          return dirMul * (statusA - statusB);
+        default:
+          return 0;
+      }
+    });
+    return out;
+  }, [listaFiltrada, sort, cobrancas]);
+
+  const totalMembros = listaOrdenada.length;
   const membrosPaginados = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return listaFiltrada.slice(start, start + pageSize);
-  }, [listaFiltrada, page, pageSize]);
+    return listaOrdenada.slice(start, start + pageSize);
+  }, [listaOrdenada, page, pageSize]);
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(totalMembros / pageSize));
@@ -144,7 +178,14 @@ export function MembrosScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [busca]);
+  }, [busca, sort.key, sort.dir]);
+
+  const onSort = (key: SortKey) => {
+    setSort((s) => {
+      if (s.key === key) return { key, dir: s.dir === 'asc' ? 'desc' : 'asc' };
+      return { key, dir: defaultDirFor(key) };
+    });
+  };
 
   const openCreate = () => {
     setEditId(null);
@@ -541,21 +582,61 @@ export function MembrosScreen() {
       ) : (
         <>
           <div className="dash-table-scroll">
-            <table className="dash-table">
+            <table className="dash-table dash-table--membros">
               <thead>
                 <tr>
-                  <th>Membro</th>
-                  <th>Telefone</th>
-                  <th>Orisá cabeça</th>
-                  <th>Situação</th>
-                  <th />
+                  <th scope="col" aria-sort={sort.key === 'nome' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('nome')} title="Ordenar por membro">
+                      <span>Membro</span>
+                      <span className="dash-th-sort__icons" aria-hidden>
+                        {sort.key === 'nome' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={sort.key === 'telefone' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('telefone')} title="Ordenar por telefone">
+                      <span>Telefone</span>
+                      <span className="dash-th-sort__icons" aria-hidden>
+                        {sort.key === 'telefone' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={sort.key === 'orixa' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('orixa')} title="Ordenar por orisá de cabeça">
+                      <span>Orisá cabeça</span>
+                      <span className="dash-th-sort__icons" aria-hidden>
+                        {sort.key === 'orixa' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={sort.key === 'situacao' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('situacao')} title="Ordenar por situação">
+                      <span>Situação</span>
+                      <span className="dash-th-sort__icons" aria-hidden>
+                        {sort.key === 'situacao' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                      </span>
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {membrosPaginados.map((m) => {
                   const devendo = pessoaEstaDevendo(m.id, cobrancas);
                   return (
-                    <tr key={m.id}>
+                    <tr
+                      key={m.id}
+                      className="dash-row-clickable"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => openEdit(m.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openEdit(m.id);
+                        }
+                      }}
+                      aria-label={`Abrir perfil de ${m.nome}`}
+                    >
                       <td>{m.nome}</td>
                       <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
                       <td>{m.orixa_cabeca_nome || '—'}</td>
@@ -563,11 +644,6 @@ export function MembrosScreen() {
                         <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
                           {devendo ? 'Devendo' : 'Em dia'}
                         </span>
-                      </td>
-                      <td>
-                        <button type="button" className="dash-btn-table" onClick={() => openEdit(m.id)}>
-                          Ver perfil
-                        </button>
                       </td>
                     </tr>
                   );

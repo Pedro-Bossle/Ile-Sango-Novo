@@ -21,6 +21,7 @@ function App() {
   useEffect(() => {
     const lenis = new Lenis();
     lenisRef.current = lenis;
+    window.__lenis = lenis;
     let rafId;
     function raf(time) {
       lenis.raf(time);
@@ -35,6 +36,7 @@ function App() {
       cancelAnimationFrame(rafId);
       lenis.destroy();
       lenisRef.current = null;
+      window.__lenis = null;
     };
   }, []);
   const scrollToTop = useCallback(() => {

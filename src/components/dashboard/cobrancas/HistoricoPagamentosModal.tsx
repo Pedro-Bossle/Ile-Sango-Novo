@@ -58,13 +58,14 @@ export function HistoricoPagamentosModal({ open, cobranca, onClose }: Props) {
                   <tr>
                     <th>Data</th>
                     <th>Valor pago</th>
+                    <th>Forma</th>
                     <th>Observação</th>
                   </tr>
                 </thead>
                 <tbody>
                   {linhas.length === 0 ? (
                     <tr>
-                      <td colSpan={3}>
+                      <td colSpan={4}>
                         <span className="dash-muted">Nenhum pagamento registado.</span>
                       </td>
                     </tr>
@@ -73,6 +74,7 @@ export function HistoricoPagamentosModal({ open, cobranca, onClose }: Props) {
                       <tr key={r.id}>
                         <td>{r.data_pagamento}</td>
                         <td>R$ {Number(r.valor ?? 0).toFixed(2)}</td>
+                        <td>{r.forma_pagamento || '—'}</td>
                         <td>{r.obs || '—'}</td>
                       </tr>
                     ))

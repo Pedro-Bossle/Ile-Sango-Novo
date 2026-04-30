@@ -17,6 +17,7 @@ function hojeISO(): string {
 export function RegistrarPagamentoModal({ open, cobranca, onClose, onSaved }: Props) {
   const [valor, setValor] = useState('');
   const [data, setData] = useState(hojeISO());
+  const [formaPagamento, setFormaPagamento] = useState('PIX');
   const [obs, setObs] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +26,7 @@ export function RegistrarPagamentoModal({ open, cobranca, onClose, onSaved }: Pr
     if (!open) return;
     setValor('');
     setData(hojeISO());
+    setFormaPagamento('PIX');
     setObs('');
     setError('');
   }, [open, cobranca?.id]);
@@ -48,7 +50,7 @@ export function RegistrarPagamentoModal({ open, cobranca, onClose, onSaved }: Pr
     setSaving(true);
     setError('');
     try {
-      await registrarPagamento(cobranca.id, pessoaId, v, data, obs);
+      await registrarPagamento(cobranca.id, pessoaId, v, data, formaPagamento, obs);
       onSaved();
       onClose();
     } catch (err) {
@@ -82,6 +84,15 @@ export function RegistrarPagamentoModal({ open, cobranca, onClose, onSaved }: Pr
           <label className="dash-field">
             <span>Data do pagamento</span>
             <input type="date" required value={data} onChange={(e) => setData(e.target.value)} />
+          </label>
+          <label className="dash-field">
+            <span>Forma de pagamento</span>
+            <select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>
+              <option value="PIX">PIX</option>
+              <option value="Dinheiro">Dinheiro</option>
+              <option value="Cartão">Cartão</option>
+              <option value="Transferência">Transferência</option>
+            </select>
           </label>
           <label className="dash-field dash-field--full">
             <span>Observação</span>

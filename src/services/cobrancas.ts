@@ -5,7 +5,7 @@ import { resolvePessoaIdCobranca } from '../types/database';
 export type CobrancaComMembro = Cobranca & { membro_nome: string };
 
 const COBRANCA_SELECT =
-  'id, valor, valor_total, valor_pago, valor_saldo, tipo, vencimento, descricao, membro, membro_id, pessoa_id, created_at';
+  'id, valor, valor_total, valor_pago, valor_saldo, tipo, vencimento, descricao, membro, membro_id, pessoa_id, created_at, deleted_at';
 
 function mapNomePessoa(pessoas: Pessoa[]): Map<string, string> {
   return new Map(pessoas.map((p) => [p.id, p.nome]));
@@ -65,7 +65,7 @@ export function isMensalidadeTipo(c: Cobranca): boolean {
 
 export async function fetchCobrancasComMembros(): Promise<CobrancaComMembro[]> {
   const [{ data: cobrancas, error: e1 }, { data: pessoas, error: e2 }] = await Promise.all([
-    supabase.from('cobrancas').select(COBRANCA_SELECT).order('vencimento', { ascending: true }),
+    supabase.from('cobrancas').select(COBRANCA_SELECT).is('deleted_at', null).order('vencimento', { ascending: true }),
     supabase.from('pessoas').select('id, nome'),
   ]);
   if (e1) throw new Error(e1.message);
@@ -142,7 +142,7 @@ export async function updateCobranca(id: string | number, input: CobrancaInput):
 }
 
 export async function deleteCobranca(id: string | number): Promise<void> {
-  const { error } = await supabase.from('cobrancas').delete().eq('id', id);
+  const { error } = await supabase.from('cobrancas').update({ deleted_at: new Date().toISOString() }).eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -151,6 +151,7 @@ export async function registrarPagamento(
   pessoaId: UUID,
   valor: number,
   dataPagamento: string,
+  formaPagamento?: string | null,
   obs?: string | null,
 ): Promise<void> {
   const { error } = await supabase.from('cobranca_pagamentos').insert({
@@ -158,6 +159,7 @@ export async function registrarPagamento(
     pessoa_id: pessoaId,
     valor,
     data_pagamento: dataPagamento,
+    forma_pagamento: formaPagamento?.trim() ? formaPagamento.trim() : null,
     obs: obs?.trim() ? obs.trim() : null,
   });
   if (error) throw new Error(error.message);
@@ -166,11 +168,97 @@ export async function registrarPagamento(
 export async function buscarHistoricoPagamentos(cobrancaId: string | number): Promise<PagamentoHistorico[]> {
   const { data, error } = await supabase
     .from('cobranca_pagamentos')
-    .select('id, cobranca_id, pessoa_id, valor, data_pagamento, obs, created_at')
+    .select('id, cobranca_id, pessoa_id, valor, data_pagamento, forma_pagamento, obs, created_at')
     .eq('cobranca_id', Number(cobrancaId))
     .order('data_pagamento', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as PagamentoHistorico[];
+}
+
+export type FiltrosRelatorioValoresPagos = {
+  de: string;
+  ate: string;
+  pessoaId?: UUID | '';
+  tipo?: CobrancaTipo | '';
+};
+
+export type LinhaRelatorioValoresPagos = {
+  data_pagamento: string;
+  membro: string;
+  descricao: string;
+  valor: number;
+  forma_pagamento: string | null;
+};
+
+type PagamentoRow = {
+  id: string;
+  cobranca_id: number;
+  pessoa_id: UUID;
+  valor: number | string;
+  data_pagamento: string;
+  forma_pagamento?: string | null;
+};
+
+type CobrancaLite = {
+  id: number;
+  descricao: string | null;
+  tipo: CobrancaTipo | string | null;
+  deleted_at: string | null;
+};
+
+export async function fetchRelatorioValoresPagos(
+  filtros: FiltrosRelatorioValoresPagos,
+): Promise<LinhaRelatorioValoresPagos[]> {
+  let pagamentosQuery = supabase
+    .from('cobranca_pagamentos')
+    .select('id, cobranca_id, pessoa_id, valor, data_pagamento, forma_pagamento')
+    .gte('data_pagamento', filtros.de)
+    .lte('data_pagamento', filtros.ate)
+    .order('data_pagamento', { ascending: true });
+
+  if (filtros.pessoaId) {
+    pagamentosQuery = pagamentosQuery.eq('pessoa_id', filtros.pessoaId);
+  }
+
+  const { data: pagamentosData, error: pagamentosError } = await pagamentosQuery;
+  if (pagamentosError) throw new Error(pagamentosError.message);
+  const pagamentos = (pagamentosData ?? []) as PagamentoRow[];
+  if (!pagamentos.length) return [];
+
+  const cobrancaIds = [...new Set(pagamentos.map((p) => p.cobranca_id))];
+  const pessoaIds = [...new Set(pagamentos.map((p) => p.pessoa_id))];
+
+  const [{ data: cobrancasData, error: cobrancasError }, { data: pessoasData, error: pessoasError }] = await Promise.all([
+    supabase.from('cobrancas').select('id, descricao, tipo, deleted_at').in('id', cobrancaIds),
+    supabase.from('pessoas').select('id, nome').in('id', pessoaIds),
+  ]);
+
+  if (cobrancasError) throw new Error(cobrancasError.message);
+  if (pessoasError) throw new Error(pessoasError.message);
+
+  const cobrancas = (cobrancasData ?? []) as CobrancaLite[];
+  const pessoas = (pessoasData ?? []) as Pessoa[];
+  const mapCobrancas = new Map<number, CobrancaLite>(cobrancas.map((c) => [Number(c.id), c]));
+  const mapPessoas = new Map<string, string>(pessoas.map((p) => [p.id, p.nome]));
+
+  return pagamentos
+    .filter((p) => {
+      const cobranca = mapCobrancas.get(Number(p.cobranca_id));
+      if (!cobranca || cobranca.deleted_at) return false;
+      if (filtros.tipo && cobranca.tipo !== filtros.tipo) return false;
+      return true;
+    })
+    .map((p) => {
+      const cobranca = mapCobrancas.get(Number(p.cobranca_id));
+      const membro = mapPessoas.get(p.pessoa_id) ?? 'Membro não informado';
+      return {
+        data_pagamento: p.data_pagamento,
+        membro,
+        descricao: cobranca?.descricao || 'Pagamento de cobrança',
+        valor: Number(p.valor ?? 0),
+        forma_pagamento: p.forma_pagamento ?? null,
+      };
+    });
 }
 
 /** Filtro por intervalo de datas (aplicado após clicar em Filtrar). */

@@ -189,6 +189,8 @@ export interface Cobranca {
 
   created_at?: string | null;
 
+  deleted_at?: string | null;
+
 }
 
 
@@ -206,6 +208,8 @@ export interface PagamentoHistorico {
   valor: string | number;
 
   data_pagamento: string;
+
+  forma_pagamento?: string | null;
 
   obs: string | null;
 

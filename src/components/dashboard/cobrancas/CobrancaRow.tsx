@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import {
+  isCobrancaPendente,
   isObrigacaoTipo,
   progressoPagamentoObrigacao,
   valorPagoCobranca,
@@ -13,6 +14,8 @@ import { HistoricoPagamentosModal } from './HistoricoPagamentosModal';
 
 type Props = {
   cobranca: CobrancaComMembro;
+  selected: boolean;
+  onSelect: (id: string | number, checked: boolean) => void;
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
@@ -25,7 +28,7 @@ function badgeTipo(t: string | null | undefined): { label: string; className: st
   return { label: t?.trim() ? String(t) : '—', className: 'dash-badge-tipo' };
 }
 
-export function CobrancaRow({ cobranca, onEdit, onDelete, onRefresh }: Props) {
+export function CobrancaRow({ cobranca, selected, onSelect, onEdit, onDelete, onRefresh }: Props) {
   const [registrarOpen, setRegistrarOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
 
@@ -35,12 +38,21 @@ export function CobrancaRow({ cobranca, onEdit, onDelete, onRefresh }: Props) {
   const obrigacao = isObrigacaoTipo(cobranca);
   const pct = obrigacao ? progressoPagamentoObrigacao(cobranca) * 100 : 0;
   const tipoBadge = badgeTipo(cobranca.tipo);
+  const pendente = isCobrancaPendente(cobranca);
 
   const dataCriacao = formatDateBR(cobranca.created_at ?? null);
 
   return (
     <>
-      <tr>
+      <tr className={selected ? 'dash-cob-row--selected' : undefined}>
+        <td className="dash-cob-select-col">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(e) => onSelect(cobranca.id, e.target.checked)}
+            aria-label={`Selecionar cobrança de ${cobranca.membro_nome}`}
+          />
+        </td>
         <td className="dash-cob-criacao">{dataCriacao}</td>
         <td>{formatDateBR(cobranca.vencimento)}</td>
         <td>{cobranca.membro_nome}</td>
@@ -74,21 +86,58 @@ export function CobrancaRow({ cobranca, onEdit, onDelete, onRefresh }: Props) {
         </td>
         <td>{cobranca.descricao || '—'}</td>
         <td className="dash-cob-acoes">
-          {obrigacao && (
+          {pendente && obrigacao && (
             <>
-              <button type="button" className="dash-btn-table" onClick={() => setRegistrarOpen(true)}>
-                Registrar pagamento
+              <button
+                type="button"
+                className="dash-btn-table"
+                onClick={() => setHistoricoOpen(true)}
+                title="Ver histórico"
+                aria-label="Ver histórico"
+              >
+                📜
               </button>
-              <button type="button" className="dash-btn-table" onClick={() => setHistoricoOpen(true)}>
-                Ver histórico
+              <button
+                type="button"
+                className="dash-btn-table dash-btn-table--pay"
+                onClick={() => setRegistrarOpen(true)}
+                title="Pagar"
+                aria-label="Pagar"
+              >
+                💵
               </button>
             </>
           )}
-          <button type="button" className="dash-btn-table" onClick={() => onEdit(cobranca)}>
-            Editar
-          </button>
-          <button type="button" className="dash-btn-table dash-btn-table--danger" onClick={() => onDelete(cobranca)}>
-            Excluir
+          {pendente && !obrigacao && (
+            <button
+              type="button"
+              className="dash-btn-table dash-btn-table--pay"
+              onClick={() => setRegistrarOpen(true)}
+              title="Pagar"
+              aria-label="Pagar"
+            >
+              💵
+            </button>
+          )}
+          {pendente && (
+            <button
+              type="button"
+              className="dash-btn-table dash-btn-table--edit"
+              onClick={() => onEdit(cobranca)}
+              title="Editar"
+              aria-label="Editar"
+            >
+              🖊️
+            </button>
+          )}
+          <button
+            type="button"
+            className="dash-btn-table dash-btn-table--danger"
+            onClick={() => onDelete(cobranca)}
+            title="Excluir"
+            aria-label="Excluir"
+          >
+            🗑️
           </button>
         </td>
       </tr>

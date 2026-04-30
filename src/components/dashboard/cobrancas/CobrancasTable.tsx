@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CobrancaComMembro } from '../../../services/cobrancas';
 import { valorTotalCobranca } from '../../../services/cobrancas';
 import { CobrancaRow } from './CobrancaRow';
 
 type Props = {
   rows: CobrancaComMembro[];
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string | number, checked: boolean) => void;
+  onToggleSelectAllVisible: (ids: Array<string | number>, checked: boolean) => void;
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
@@ -102,7 +105,15 @@ function SortTh({ label, sortKey, activeKey, dir, onSort, title }: SortHeaderPro
   );
 }
 
-export function CobrancasTable({ rows, onEdit, onDelete, onRefresh }: Props) {
+export function CobrancasTable({
+  rows,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAllVisible,
+  onEdit,
+  onDelete,
+  onRefresh,
+}: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'vencimento',
     dir: 'asc',
@@ -120,6 +131,17 @@ export function CobrancasTable({ rows, onEdit, onDelete, onRefresh }: Props) {
     });
   };
 
+  const visibleIds = sorted.map((c) => String(c.id));
+  const totalSelecionadosVisiveis = visibleIds.filter((id) => selectedIds.has(id)).length;
+  const allVisiveisSelecionados = visibleIds.length > 0 && totalSelecionadosVisiveis === visibleIds.length;
+  const someVisiveisSelecionados = totalSelecionadosVisiveis > 0 && !allVisiveisSelecionados;
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!selectAllRef.current) return;
+    selectAllRef.current.indeterminate = someVisiveisSelecionados;
+  }, [someVisiveisSelecionados]);
+
   if (rows.length === 0) {
     return <p className="dash-muted">Nenhuma cobrança encontrada.</p>;
   }
@@ -128,6 +150,15 @@ export function CobrancasTable({ rows, onEdit, onDelete, onRefresh }: Props) {
       <table className="dash-table dash-table--cobrancas">
         <thead>
           <tr>
+            <th scope="col" className="dash-th-static dash-cob-select-col">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allVisiveisSelecionados}
+                onChange={(e) => onToggleSelectAllVisible(sorted.map((c) => c.id), e.target.checked)}
+                aria-label="Selecionar todas as cobranças visíveis"
+              />
+            </th>
             <SortTh
               label="Criação"
               sortKey="criacao"
@@ -183,7 +214,15 @@ export function CobrancasTable({ rows, onEdit, onDelete, onRefresh }: Props) {
         </thead>
         <tbody>
           {sorted.map((c) => (
-            <CobrancaRow key={String(c.id)} cobranca={c} onEdit={onEdit} onDelete={onDelete} onRefresh={onRefresh} />
+            <CobrancaRow
+              key={String(c.id)}
+              cobranca={c}
+              selected={selectedIds.has(String(c.id))}
+              onSelect={onToggleSelect}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onRefresh={onRefresh}
+            />
           ))}
         </tbody>
       </table>

@@ -38,6 +38,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const [menuAtivo, setMenuAtivo] = useState(MENUS[0]);
   const [sidebarAberta, setSidebarAberta] = useState(false);
+  const [sidebarFixa, setSidebarFixa] = useState(() => localStorage.getItem('dash_sidebar_fixa') === 'true');
+  const [sidebarHover, setSidebarHover] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [eventos, setEventos] = useState([]);
@@ -58,6 +60,11 @@ const Dashboard = () => {
   const [zoom, setZoom] = useState(1);
   const [areaCrop, setAreaCrop] = useState(null);
   const modalRef = useRef(null);
+  const sidebarExpandidaDesktop = sidebarFixa || sidebarHover;
+
+  useEffect(() => {
+    localStorage.setItem('dash_sidebar_fixa', sidebarFixa ? 'true' : 'false');
+  }, [sidebarFixa]);
 
   const carregarDados = useCallback(async () => {
     setLoading(true);
@@ -79,7 +86,7 @@ const Dashboard = () => {
       // `count` + head:true pode devolver valor errado em alguns casos; o tamanho da lista de ids
       // corresponde ao que o utilizador pode ver (RLS) e à contagem real de linhas.
       supabase.from('pessoas').select('id'),
-      supabase.from('cobrancas').select('id'),
+      supabase.from('cobrancas').select('id').is('deleted_at', null),
     ]);
 
     if (!sessao?.session) {
@@ -272,8 +279,15 @@ const Dashboard = () => {
 
       {sidebarAberta && <div className="dash-sidebar-backdrop" onClick={() => setSidebarAberta(false)} />}
 
-      <aside className={`dash-sidebar ${sidebarAberta ? 'open' : ''}`}>
-        <h2>Area Restrita</h2>
+      <aside
+        className={`dash-sidebar ${sidebarAberta ? 'open' : ''} ${sidebarExpandidaDesktop ? 'is-expanded' : 'is-collapsed'}`}
+        onMouseEnter={() => setSidebarHover(true)}
+        onMouseLeave={() => setSidebarHover(false)}
+      >
+        <div className="dash-sidebar-mini-logo" aria-hidden={sidebarExpandidaDesktop}>
+          <img src="/images/logo-ile.png" alt="Logo do terreiro" />
+        </div>
+        <h2 className="dash-sidebar-label">Area Restrita</h2>
         <button
           className={`dash-menu ${menuAtivo === 'visao-geral' ? 'active' : ''}`}
           onClick={() => {
@@ -281,7 +295,7 @@ const Dashboard = () => {
             setSidebarAberta(false);
           }}
         >
-          Visao geral
+          <span className="dash-sidebar-label">Visao geral</span>
         </button>
         <button
           className={`dash-menu ${menuAtivo === 'eventos' ? 'active' : ''}`}
@@ -290,7 +304,7 @@ const Dashboard = () => {
             setSidebarAberta(false);
           }}
         >
-          Eventos
+          <span className="dash-sidebar-label">Eventos</span>
         </button>
         <button
           className={`dash-menu ${menuAtivo === 'catalogo' ? 'active' : ''}`}
@@ -299,7 +313,7 @@ const Dashboard = () => {
             setSidebarAberta(false);
           }}
         >
-          Catalogo
+          <span className="dash-sidebar-label">Catalogo</span>
         </button>
         <button
           className={`dash-menu ${menuAtivo === 'membros' ? 'active' : ''}`}
@@ -308,7 +322,7 @@ const Dashboard = () => {
             setSidebarAberta(false);
           }}
         >
-          Membros
+          <span className="dash-sidebar-label">Membros</span>
         </button>
         <button
           className={`dash-menu ${menuAtivo === 'cobrancas' ? 'active' : ''}`}
@@ -317,14 +331,23 @@ const Dashboard = () => {
             setSidebarAberta(false);
           }}
         >
-          Cobrancas
+          <span className="dash-sidebar-label">Cobrancas</span>
         </button>
-        <button className="dash-logout" onClick={handleLogout}>
-          Sair
+        <button className="dash-logout" onClick={handleLogout} title="Sair">
+          <span className="dash-sidebar-label">Sair</span>
+        </button>
+        <button
+          type="button"
+          className={`dash-sidebar-pin ${sidebarFixa ? 'is-active' : ''}`}
+          aria-label={sidebarFixa ? 'Desafixar barra lateral' : 'Fixar barra lateral'}
+          title={sidebarFixa ? 'Desafixar barra lateral' : 'Fixar barra lateral'}
+          onClick={() => setSidebarFixa((prev) => !prev)}
+        >
+          {sidebarFixa ? '📌' : '📍'}
         </button>
       </aside>
 
-      <div className="dash-content">
+      <div className={`dash-content ${sidebarExpandidaDesktop ? 'dash-content--sidebar-expanded' : 'dash-content--sidebar-collapsed'}`}>
         {error && <p className="dash-error">{error}</p>}
 
         {menuAtivo === 'visao-geral' && (
