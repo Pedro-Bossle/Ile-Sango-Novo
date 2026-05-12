@@ -13,78 +13,93 @@ const Contato = () => {
         path="/contato"
         description="Telefone, e-mail, endereço e horários do Ilê Sàngó Aganjù e Oṣun Pandá em Caxias do Sul."
       />
-      <div className="contato-hero">
-        <h1 className="contato-hero__title">Contato</h1>
-        <p className="contato-hero__lead">
-          Fale conosco para orientações, agendamentos e informações sobre atendimentos.
-        </p>
-      </div>
-
-      <div className="contato-grid">
-        <article className="contato-card">
-          <h2 className="contato-card__title">Fale com a casa</h2>
-          <a className="contato-link" href="https://wa.me/555491556023?text=Ol%C3%A1!%20Vim%20pelo%20site%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es/">
-            <img className="contato-icon" src="/images/icons/ico whatsapp.png" alt="" />
-            (54) 9.9155-6023
-          </a>
-          <a className="contato-link" href="mailto:ile.de.ase@gmail.com?subject=Contato&body=Olá, gostaria de saber mais sobre a casa de religião.">
-            <img className="contato-icon" src="/images/icons/ico mail.png" alt="" />
-            ile.de.ase@gmail.com
-          </a>
-        </article>
-
-        <article className="contato-card">
-          <h2 className="contato-card__title">Endereço</h2>
-          <a className="contato-link" href="https://maps.app.goo.gl/xqmvGBdkY1wMJAtg7">
-            <img className="contato-icon" src="/images/icons/ico location.png" alt="" />
-            R. Visc. de Pelotas - Pio X, Caxias do Sul - RS, 95020-500
-          </a>
-        </article>
-
-        <article className="contato-card">
-          <h2 className="contato-card__title">Atendimentos</h2>
-          <p className="contato-text">
-            <img className="contato-icon" src="/images/icons/ico relogio.svg" alt="" />
-            10:00 às 20:00
+      <div className="contato-page__inner">
+        <header className="contato-hero">
+          <h1 className="contato-hero__title">Contato</h1>
+          <p className="contato-hero__lead">
+            Fale conosco para orientações, agendamentos e informações sobre atendimentos. Respeito e acolhimento em
+            cada retorno.
           </p>
-          <p className="contato-note">Atendimentos somente com horário marcado.</p>
-        </article>
-      </div>
+        </header>
 
-      <div className="contato-map-wrap">
-        <h2 className="contato-map__title">Localização</h2>
-        <iframe
-          className="contato-map"
-          src={MAP_EMBED_SRC}
-          title="Localização Ilê Sàngó Aganjù e Oṣun Pandá no mapa"
-          width="100%"
-          height="450"
-          style={{ border: 'none', borderRadius: '12px' }}
-          allowFullScreen
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      </div>
+        <div className="contato-grid">
+          <article className="contato-card">
+            <h2 className="contato-card__title">Fale com a casa</h2>
+            <a
+              className="contato-link"
+              href="https://wa.me/555491556023?text=Ol%C3%A1!%20Vim%20pelo%20site%20e%20gostaria%20de%20mais%20informa%C3%A7%C3%B5es/"
+            >
+              <img className="contato-icon" src="/images/icons/ico whatsapp.png" alt="" />
+              (54) 9.9155-6023
+            </a>
+            <a
+              className="contato-link"
+              href="mailto:ile.de.ase@gmail.com?subject=Contato&body=Olá, gostaria de saber mais sobre a casa de religião."
+            >
+              <img className="contato-icon" src="/images/icons/ico mail.png" alt="" />
+              ile.de.ase@gmail.com
+            </a>
+          </article>
 
-      <div className="contato-social">
-        <a
-          className="contato-link"
-          href="https://www.instagram.com/ile_sango_osun/"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img className="contato-icon" src="/images/icons/ico instagram.png" alt="" />
-          @ile_sango_osun
-        </a>
-        <a
-          className="contato-link"
-          href="https://www.facebook.com/profile.php?id=61569272685776"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <img className="contato-icon" src="/images/icons/ico facebook.png" alt="" />
-          Ilê Asè Sàngó Aganjù e Osun Pandà
-        </a>
+          <article className="contato-card">
+            <h2 className="contato-card__title">Endereço</h2>
+            <a className="contato-link" href="https://maps.app.goo.gl/xqmvGBdkY1wMJAtg7">
+              <img className="contato-icon" src="/images/icons/ico location.png" alt="" />
+              R. Visc. de Pelotas - Pio X, Caxias do Sul - RS, 95034385
+            </a>
+          </article>
+
+          <article className="contato-card">
+            <h2 className="contato-card__title">Atendimentos</h2>
+            <p className="contato-text">
+              <img className="contato-icon" src="/images/icons/ico relogio.svg" alt="" />
+              10:00 às 20:00
+            </p>
+            <p className="contato-note">Atendimentos somente com horário marcado.</p>
+          </article>
+        </div>
+
+        <div className="contato-map-wrap">
+          <h2 className="contato-map__title">Localização</h2>
+          <div className="contato-map-frame">
+            <iframe
+              className="contato-map"
+              src={MAP_EMBED_SRC}
+              title="Localização Ilê Sàngó Aganjù e Oṣun Pandá no mapa"
+              width="100%"
+              height="450"
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+            />
+          </div>
+        </div>
+
+        <section className="contato-social" aria-labelledby="contato-social-title">
+          <h2 id="contato-social-title" className="contato-social__title">
+            Redes sociais
+          </h2>
+          <div className="contato-social__links">
+            <a
+              className="contato-social-link"
+              href="https://www.instagram.com/ile_sango_osun/"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img className="contato-icon" src="/images/icons/ico instagram.png" alt="" />
+              @ile_sango_osun
+            </a>
+            <a
+              className="contato-social-link"
+              href="https://www.facebook.com/profile.php?id=61569272685776"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <img className="contato-icon" src="/images/icons/ico facebook.png" alt="" />
+              Ilê Asè Sàngó Aganjù e Osun Pandà
+            </a>
+          </div>
+        </section>
       </div>
     </section>
   );

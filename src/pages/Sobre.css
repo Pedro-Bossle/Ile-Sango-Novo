@@ -1,56 +1,181 @@
 .sobre-page {
-  padding-bottom: 2rem;
+  padding-bottom: 3rem;
+  background-color: #ffffff;
+}
+
+.sobre-page .home-intro {
+  background: transparent;
+  border-bottom: none;
+  padding: 1.5rem 1rem 2rem;
+}
+
+.sobre-page .home-intro__inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem clamp(1.1rem, 3vw, 2.25rem);
+  border: 1px solid rgba(83, 5, 38, 0.1);
+  border-radius: 18px;
+  background: linear-gradient(145deg, #fffdf9 0%, #ffffff 52%, #faf8f5 100%);
+  box-shadow: 0 4px 28px rgba(83, 5, 38, 0.07);
 }
 
 .sobre-page__header {
   text-align: center;
-  padding: 1.5rem 1rem 0;
+  padding: 2.5rem 1rem 0.5rem;
 }
 
 .sobre-page__h1 {
   margin: 0;
   font-family: var(--fonte-secundaria);
   color: var(--bordo);
-  font-size: clamp(1.75rem, 4vw, 2.1rem);
+  font-size: clamp(1.85rem, 4vw, 2.35rem);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sobre-page__h1::after {
+  content: '';
+  display: block;
+  width: min(100px, 22vw);
+  height: 3px;
+  margin: 1rem auto 0;
+  border-radius: 3px;
+  background: var(--bordo-degrade);
+}
+
+.sobre-page__lead {
+  margin: 1.35rem auto 0;
+  max-width: 32rem;
+  color: var(--cinza-fonte);
+  line-height: 1.65;
+  font-size: clamp(1rem, 1.15vw, 1.08rem);
 }
 
 .sobre-mission {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 2rem 1.25rem;
+  max-width: 720px;
+  margin: 2.25rem auto 0;
+  padding: 2rem clamp(1.25rem, 3vw, 2.25rem);
+  border-radius: 18px;
+  border: 1px solid rgba(83, 5, 38, 0.09);
+  background: #ffffff;
+  box-shadow: 0 2px 22px rgba(83, 5, 38, 0.05);
 }
 
 .sobre-mission__title {
-  margin: 0 0 0.75rem;
+  margin: 0 0 1rem;
   font-family: var(--fonte-secundaria);
   color: var(--bordo);
-  font-size: 1.35rem;
+  font-size: clamp(1.25rem, 2.2vw, 1.45rem);
   text-align: center;
 }
 
 .sobre-mission__text {
   margin: 0;
-  line-height: 1.65;
+  line-height: 1.72;
   color: var(--cinza-fonte);
   text-align: center;
+  font-size: clamp(0.98rem, 1.05vw, 1.05rem);
+}
+
+.sobre-mission__text--second {
+  margin-top: 1rem;
+  font-weight: 600;
+  color: var(--bordo);
 }
 
 .sobre-dirigentes {
-  padding: 0 0 2rem;
+  margin-top: 2.75rem;
+  padding: 2.5rem 0.75rem 1rem;
+  border-radius: 20px 20px 0 0;
+  background: linear-gradient(180deg, rgba(83, 5, 38, 0.04) 0%, rgba(255, 255, 255, 0) 72%);
 }
 
 .sobre-dirigentes__title {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.6rem;
   font-family: var(--fonte-secundaria);
   color: var(--bordo);
-  font-size: 1.35rem;
+  font-size: clamp(1.25rem, 2.2vw, 1.45rem);
   text-align: center;
 }
 
 .sobre-dirigentes__desc {
-  margin: 0 auto 1rem;
+  margin: 0 auto 1.25rem;
   max-width: 720px;
   text-align: center;
   color: var(--cinza-fonte);
   padding: 0 1rem;
+  line-height: 1.6;
+  font-size: 0.98rem;
+}
+
+.sobre-cta {
+  max-width: 640px;
+  margin: 2.5rem auto 0;
+  padding: 2rem 1.25rem 0.5rem;
+  text-align: center;
+  border-top: 1px solid rgba(83, 5, 38, 0.1);
+}
+
+.sobre-cta__title {
+  margin: 0 0 0.65rem;
+  font-family: var(--fonte-secundaria);
+  color: var(--bordo);
+  font-size: clamp(1.15rem, 2vw, 1.32rem);
+}
+
+.sobre-cta__text {
+  margin: 0 auto;
+  max-width: 30rem;
+  color: var(--cinza-fonte);
+  line-height: 1.65;
+  font-size: 0.98rem;
+}
+
+.sobre-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1.35rem;
+}
+
+.sobre-cta__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1.35rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+  background: var(--bordo);
+  color: #fff;
+  border: 2px solid var(--bordo);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.sobre-cta__btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(83, 5, 38, 0.25);
+}
+
+.sobre-cta__btn:focus-visible {
+  outline: 2px solid var(--amarelo-dourado);
+  outline-offset: 3px;
+}
+
+.sobre-cta__btn--outline {
+  background: transparent;
+  color: var(--bordo);
+}
+
+.sobre-cta__btn--outline:hover {
+  background: rgba(83, 5, 38, 0.06);
+  box-shadow: none;
+}
+
+@media (max-width: 767px) {
+  .sobre-page .home-intro__inner {
+    padding: 1.5rem 1.15rem;
+  }
 }

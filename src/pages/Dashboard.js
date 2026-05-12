@@ -7,7 +7,7 @@ import { MembrosScreen } from '../components/dashboard/membros/MembrosScreen.tsx
 import { CobrancasScreen } from '../components/dashboard/cobrancas/CobrancasScreen.tsx';
 
 const MENUS = ['visao-geral', 'eventos', 'catalogo', 'membros', 'cobrancas'];
-const ENDERECO_EVENTO_PADRAO = 'R. Visc. de Pelotas, 2576 - Pio X, Caxias do Sul - RS, 95020-500';
+const ENDERECO_EVENTO_PADRAO = 'R. Visc. de Pelotas, 2576 - Pio X, Caxias do Sul - RS, 95034385';
 
 const defaultEvento = { id: null, nome: '', data: '', hora: '', local: '', descricao: '', tipo: 'umbanda', icone_customizado: null };
 const defaultCatalogo = { id: null, nome: '', categoria: '', valor: '', descricao: '', variacoes: '' };

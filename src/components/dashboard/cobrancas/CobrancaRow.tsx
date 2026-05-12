@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   isCobrancaPendente,
+  isMensalidadeTipo,
   isObrigacaoTipo,
   progressoPagamentoObrigacao,
   valorPagoCobranca,
@@ -35,6 +36,7 @@ export function CobrancaRow({ cobranca, selected, onSelect, onEdit, onDelete, on
   const total = valorTotalCobranca(cobranca);
   const pago = valorPagoCobranca(cobranca);
   const saldo = valorSaldoCobranca(cobranca);
+  const mensalidade = isMensalidadeTipo(cobranca);
   const obrigacao = isObrigacaoTipo(cobranca);
   const pct = obrigacao ? progressoPagamentoObrigacao(cobranca) * 100 : 0;
   const tipoBadge = badgeTipo(cobranca.tipo);
@@ -78,6 +80,10 @@ export function CobrancaRow({ cobranca, selected, onSelect, onEdit, onDelete, on
                 <div className="dash-cob-progress__fill" style={{ width: `${Math.min(100, pct)}%` }} />
               </div>
             </>
+          ) : mensalidade ? (
+            <div className="dash-cob-valores__line">
+              <strong>R$ {saldo.toFixed(2)}</strong>
+            </div>
           ) : (
             <div className="dash-cob-valores__line">
               <strong>R$ {total.toFixed(2)}</strong>

@@ -51,24 +51,26 @@ function formatDataLonga(value) {
 }
 
 function formatHora(value) {
-  if (!value) return '';
+  if (!value) return '—';
   const m = String(value).match(/^(\d{1,2}):(\d{2})/);
   if (m) return `${m[1].padStart(2, '0')}:${m[2]}`;
   return String(value);
 }
 
-function resumoEndereco(value) {
-  if (!value) return 'Local a definir';
-  return String(value).slice(0, 60);
+function textoLocal(value) {
+  if (!value) return 'Endereço a definir';
+  return String(value).trim();
 }
 
 export default function EventCard({ evento }) {
   const iconeSrc = resolverIconeEvento(evento);
   const fallbackIcon = EVENT_TYPE_ICONS_FALLBACK[evento?.tipo] || EVENT_TYPE_ICONS_FALLBACK.umbanda;
   const iconCandidates = iconCandidatesByTipo(evento?.tipo);
+  const dataIso = evento.data ? String(evento.data).slice(0, 10) : undefined;
+
   return (
     <article className="event-card-compact">
-      <header className="event-card-compact__top">
+      <header className="event-card-compact__header">
         <div className="event-card-compact__icon-wrap">
           <img
             src={iconeSrc}
@@ -88,21 +90,29 @@ export default function EventCard({ evento }) {
             data-icon-idx="0"
           />
         </div>
-        <div className="event-card-compact__head-text">
+        <div className="event-card-compact__head-main">
           <h3 className="event-card-compact__title">{evento.nome}</h3>
-          <p className="event-card-compact__date">{formatDataLonga(evento.data)}</p>
+          <time className="event-card-compact__date" {...(dataIso ? { dateTime: dataIso } : {})}>
+            {formatDataLonga(evento.data)}
+          </time>
         </div>
       </header>
+
       <p className="event-card-compact__description">{evento.descricao || 'Evento da nossa casa.'}</p>
-      <footer className="event-card-compact__chips">
-        <span className="event-card-compact__chip">
-          <span aria-hidden className="event-card-compact__chip-icon">🕒</span>
-          <span className="event-card-compact__chip-text">{formatHora(evento.hora)}</span>
-        </span>
-        <span className="event-card-compact__chip">
-          <span aria-hidden className="event-card-compact__chip-icon">📍</span>
-          <span className="event-card-compact__chip-text">{resumoEndereco(evento.local)}</span>
-        </span>
+
+      <footer className="event-card-compact__footer">
+        <ul className="event-card-compact__meta-list">
+          <li className="event-card-compact__meta-item">
+            <span className="event-card-compact__meta-key">Horário</span>
+            <span className="event-card-compact__meta-val">{formatHora(evento.hora)}</span>
+          </li>
+          <li className="event-card-compact__meta-item">
+            <span className="event-card-compact__meta-key">Endereço</span>
+            <span className="event-card-compact__meta-val event-card-compact__meta-val--address">
+              {textoLocal(evento.local)}
+            </span>
+          </li>
+        </ul>
       </footer>
     </article>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { CobrancaComMembro } from '../../../services/cobrancas';
-import { registrarPagamento, valorSaldoCobranca } from '../../../services/cobrancas';
+import { isMensalidadeTipo, registrarPagamento, valorSaldoCobranca } from '../../../services/cobrancas';
 import { resolvePessoaIdCobranca, type UUID } from '../../../types/database';
 
 type Props = {
@@ -24,12 +24,13 @@ export function RegistrarPagamentoModal({ open, cobranca, onClose, onSaved }: Pr
 
   useEffect(() => {
     if (!open) return;
-    setValor('');
+    const saldo = cobranca ? valorSaldoCobranca(cobranca) : 0;
+    setValor(cobranca && isMensalidadeTipo(cobranca) && saldo > 0 ? saldo.toFixed(2) : '');
     setData(hojeISO());
     setFormaPagamento('PIX');
     setObs('');
     setError('');
-  }, [open, cobranca?.id]);
+  }, [open, cobranca]);
 
   if (!open || !cobranca) return null;
 

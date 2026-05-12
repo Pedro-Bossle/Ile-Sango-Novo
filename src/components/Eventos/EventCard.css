@@ -1,49 +1,42 @@
 .event-card-compact {
-  /* 🎨 COR: Fundo do card — estava muito escuro, clareado para melhor legibilidade */
-  background: linear-gradient(135deg, #915c5c 0%, #d4a15d 100%);
-  /* 🎨 COR: Borda base do card em baixa opacidade */
-  border: 1px solid rgba(197, 124, 29, 0.35);
+  background: linear-gradient(165deg, #fffef9 0%, #ffffff 45%, #faf6f0 100%);
+  border: 1px solid rgba(83, 5, 38, 0.14);
   border-radius: 16px;
   width: 100%;
   box-sizing: border-box;
   min-width: 0;
   max-width: 520px;
-  min-height: 230px;
-  padding: 1rem 1rem 0.9rem;
+  padding: 1rem 1rem 0.95rem;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
-  /* 🎨 COR: Sombra base suave com acento dourado/bordô */
-  box-shadow: 0 10px 26px rgba(83, 5, 38, 0.28);
+  gap: 0.6rem;
+  box-shadow: 0 4px 18px rgba(83, 5, 38, 0.08);
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
 .event-card-compact:hover {
-  transform: translateY(-4px);
-  /* 🎨 COR: Borda de destaque no hover — use a cor de acento do projeto */
-  border-color: rgba(197, 124, 29, 0.8);
-  /* 🎨 COR: Glow do hover com acento em baixa opacidade */
-  box-shadow: 0 14px 34px rgba(197, 124, 29, 0.25), 0 4px 16px rgba(83, 5, 38, 0.35);
+  transform: translateY(-3px);
+  border-color: rgba(197, 124, 29, 0.45);
+  box-shadow: 0 10px 28px rgba(83, 5, 38, 0.12), 0 2px 10px rgba(197, 124, 29, 0.1);
 }
 
-.event-card-compact__top {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.8rem;
+.event-card-compact__header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.85rem;
+  align-items: start;
 }
 
 .event-card-compact__icon-wrap {
-  /* 🔵 ÍCONE: Container circular do ícone — overflow hidden garante o recorte */
   border-radius: 50%;
   overflow: hidden;
-  /* 🔵 ÍCONE: Tamanho do círculo do ícone — ajuste para mobile/desktop */
   width: 48px;
   height: 48px;
   flex: 0 0 48px;
-  /* 🎨 COR: Fundo da área do ícone — branco para realçar os PNGs */
   background: #ffffff;
-  border: 1px solid rgba(237, 233, 228, 0.25);
+  border: 1px solid rgba(83, 5, 38, 0.12);
+  box-shadow: 0 2px 8px rgba(83, 5, 38, 0.06);
 }
 
 .event-card-compact__icon {
@@ -52,99 +45,110 @@
   object-fit: cover;
 }
 
-.event-card-compact__head-text {
+.event-card-compact__head-main {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .event-card-compact__title {
   margin: 0;
-  /* 📐 TAMANHO: Título do card — evitar quebra excessiva */
-  font-size: 1.1rem;
+  font-family: var(--fonte-secundaria);
+  font-size: clamp(1.02rem, 2.5vw, 1.14rem);
   font-weight: 700;
-  line-height: 1.3;
-  /* 🎨 COR: Texto do título — deve contrastar com o fundo escuro */
-  color: var(--branco-visivel);
+  line-height: 1.28;
+  color: var(--bordo);
 }
 
 .event-card-compact__date {
-  margin: 0.2rem 0 0;
-  /* 📐 TAMANHO: Subtítulo de data — fonte menor */
-  font-size: 0.8rem;
+  margin: 0;
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.35;
   text-transform: capitalize;
-  white-space: normal;
-  /* 🎨 COR: Texto secundário da data */
-  color: rgba(237, 233, 228, 0.85);
+  color: var(--marrom);
+  background: rgba(236, 207, 121, 0.22);
+  border: 1px solid rgba(197, 124, 29, 0.28);
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
 }
 
 .event-card-compact__description {
   margin: 0;
-  line-height: 1.35;
-  /* 🎨 COR: Texto da descrição */
-  color: rgba(237, 233, 228, 0.92);
+  flex: 0 1 auto;
+  line-height: 1.5;
+  font-size: 0.9rem;
+  color: var(--cinza-fonte);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
 }
 
-.event-card-compact__chips {
+.event-card-compact__footer {
   margin-top: auto;
-  display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: 8px;
-  width: 100%;
-  overflow: hidden;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(83, 5, 38, 0.1);
 }
 
-.event-card-compact__chip {
+/* Horário e endereço em 2 linhas (uma faixa cada), endereço pode quebrar várias linhas */
+.event-card-compact__meta-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  align-items: center;
-  gap: 0.38rem;
-  font-size: 0.92rem;
-  border-radius: 999px;
-  padding: 0.45rem 0.6rem;
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  /* 🎨 COR: Fundo dos chips de horário e local */
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--branco-visivel);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.event-card-compact__meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   min-width: 0;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(83, 5, 38, 0.04);
+  border: 1px solid rgba(83, 5, 38, 0.1);
 }
 
-.event-card-compact__chip:first-child {
-  flex: 0 1 135px;
+.event-card-compact__meta-key {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bordo);
 }
 
-.event-card-compact__chip:last-child {
-  flex: 1 1 220px;
+.event-card-compact__meta-val {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--cinza-fonte);
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
-.event-card-compact__chip-icon {
-  flex: 0 0 auto;
-}
-
-.event-card-compact__chip-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.event-card-compact__meta-val--address {
+  white-space: normal;
+  font-weight: 500;
 }
 
 @media (min-width: 960px) {
   .event-card-compact__icon-wrap {
-    /* 🔵 ÍCONE: Tamanho do círculo do ícone no desktop */
     width: 56px;
     height: 56px;
-    flex-basis: 56px;
   }
 }
 
 @media (max-width: 640px) {
   .event-card-compact {
     max-width: 100%;
-    min-height: 250px;
-  }
-
-  .event-card-compact__chips {
-    grid-template-columns: 1fr;
   }
 }

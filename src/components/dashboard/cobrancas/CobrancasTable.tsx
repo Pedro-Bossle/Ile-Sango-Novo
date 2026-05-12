@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CobrancaComMembro } from '../../../services/cobrancas';
-import { valorTotalCobranca } from '../../../services/cobrancas';
+import { isMensalidadeTipo, valorSaldoCobranca, valorTotalCobranca } from '../../../services/cobrancas';
 import { CobrancaRow } from './CobrancaRow';
 
 type Props = {
@@ -40,6 +40,10 @@ function parseDia(data: string | null | undefined): number | null {
   return Number.isNaN(t) ? null : t;
 }
 
+function valorTabelaCobranca(c: CobrancaComMembro): number {
+  return isMensalidadeTipo(c) ? valorSaldoCobranca(c) : valorTotalCobranca(c);
+}
+
 function sortCobrancas(list: CobrancaComMembro[], key: SortKey, dir: 'asc' | 'desc'): CobrancaComMembro[] {
   const out = [...list];
   const cmpNumNullLast = (a: number | null, b: number | null): number => {
@@ -67,7 +71,7 @@ function sortCobrancas(list: CobrancaComMembro[], key: SortKey, dir: 'asc' | 'de
         return dir === 'asc' ? cmp : -cmp;
       }
       case 'valores': {
-        const d = valorTotalCobranca(a) - valorTotalCobranca(b);
+        const d = valorTabelaCobranca(a) - valorTabelaCobranca(b);
         return dir === 'asc' ? d : -d;
       }
       case 'descricao': {
@@ -197,7 +201,7 @@ export function CobrancasTable({
               activeKey={sort.key}
               dir={sort.dir}
               onSort={onSort}
-              title="Ordenar por valor total (maior / menor)"
+              title="Ordenar por valor exibido (maior / menor)"
             />
             <SortTh
               label="Descrição"
