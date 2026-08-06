@@ -13,6 +13,7 @@ import RedefinirSenha from './pages/RedefinirSenha';
 import Cultos from './pages/Cultos';
 import TermosDeUso from './pages/TermosDeUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
+import TrocarSenha from './pages/TrocarSenha';
 import Dashboard from './pages/Dashboard';
 
 function App() {
@@ -82,6 +83,7 @@ function App() {
       <Route path="/politica-de-privacidade" element={renderWithLayout(<PoliticaPrivacidade />)} />
       <Route path="/login" element={renderWithLayout(<Login />)} />
       <Route path="/redefinir-senha" element={renderWithLayout(<RedefinirSenha />)} />
+      <Route path="/trocar-senha" element={renderWithLayout(<TrocarSenha />)} />
       <Route path="/dashboard" element={<Dashboard />} />
     </Routes>
   );

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { PageMeta } from '../components/Seo/PageMeta';
+import { isPasswordChangeRequired } from '../services/passwordChangeRequired.ts';
 import {
   checkAuthRateLimit,
   clearAuthRateLimit,
@@ -73,7 +74,7 @@ const Login = () => {
 
     const normalizedEmail = email.trim().toLowerCase();
     recordAuthAttempt('login');
-    const { error: loginError } = await supabase.auth.signInWithPassword({
+    const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
       email: normalizedEmail,
       password: senha,
     });
@@ -85,9 +86,22 @@ const Login = () => {
     }
 
     clearAuthRateLimit('login');
+
+    try {
+      const mustChange = await isPasswordChangeRequired(loginData.user?.id);
+      if (mustChange) {
+        setMessage('Login ok. E necessario trocar a senha antes de continuar.');
+        setLoading(false);
+        navigate('/trocar-senha', { replace: true });
+        return;
+      }
+    } catch {
+      /* segue para a dashboard */
+    }
+
     setMessage('Login realizado com sucesso.');
     setLoading(false);
-    navigate('/dashboard');
+    navigate('/dashboard', { replace: true });
   };
 
   const handleForgotPassword = async () => {

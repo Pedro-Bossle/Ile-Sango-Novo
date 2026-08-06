@@ -13,6 +13,7 @@ import {
   loadEnderecosPadrao,
   saveEnderecosPadrao,
 } from '../utils/enderecosPadrao.ts';
+import { isPasswordChangeRequired } from '../services/passwordChangeRequired.ts';
 
 const MENUS = ['visao-geral', 'eventos', 'catalogo', 'membros', 'cobrancas', 'orixas'];
 
@@ -104,6 +105,26 @@ const Dashboard = () => {
   const carregarDados = useCallback(async () => {
     setLoading(true);
     setError('');
+
+    const { data: sessao } = await supabase.auth.getSession();
+    if (!sessao?.session) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    const uid = sessao.session.user?.id ?? null;
+    setUserId(uid);
+
+    // Fluxo: Login → troca de senha (antes de carregar a dashboard) → dashboard + tutorial
+    try {
+      if (uid && (await isPasswordChangeRequired(uid))) {
+        navigate('/trocar-senha', { replace: true });
+        return;
+      }
+    } catch {
+      /* se a verificação falhar, não bloqueia o acesso */
+    }
+
     const hojeIso = new Date().toISOString().slice(0, 10);
     // Exclui automaticamente eventos passados (dia seguinte ao evento em diante).
     await supabase.from('eventos').delete().lt('data', hojeIso);
@@ -113,7 +134,6 @@ const Dashboard = () => {
     const ha30Iso = ha30.toISOString().slice(0, 10);
 
     const [
-      { data: sessao },
       { data: eventosData, error: eventosError },
       { data: catalogoData, error: catalogoError },
       { data: pessoasIds, error: pessoasError },
@@ -121,7 +141,6 @@ const Dashboard = () => {
       { data: pagamentos30d, error: pagamentosError },
       { data: cobrancasSaldo, error: saldoError },
     ] = await Promise.all([
-      supabase.auth.getSession(),
       supabase.from('eventos').select('id, nome, data, hora, local, descricao, tipo, icone_customizado').order('data', { ascending: true }),
       supabase.from('catalogo').select('id, nome, categoria, valor, descricao, variacoes').order('id', { ascending: true }),
       // `count` + head:true pode devolver valor errado em alguns casos; o tamanho da lista de ids
@@ -131,13 +150,6 @@ const Dashboard = () => {
       supabase.from('cobranca_pagamentos').select('valor').gte('data_pagamento', ha30Iso).lte('data_pagamento', hojeIso),
       supabase.from('cobrancas').select('valor_saldo, valor_total, valor_pago, valor').is('deleted_at', null),
     ]);
-
-    if (!sessao?.session) {
-      navigate('/login');
-      return;
-    }
-
-    setUserId(sessao.session.user?.id ?? null);
 
     if (eventosError || catalogoError || pessoasError || cobrancasCountError || pagamentosError || saldoError) {
       setError('Falha ao carregar dados da dashboard. Verifique se as tabelas existem no Supabase.');
@@ -400,6 +412,7 @@ const Dashboard = () => {
 
   return (
     <section className={`dash-page${showScrollTop ? ' dash-page--has-scroll-top' : ''}`}>
+      {/* Tutorial só depois do gate de senha e dos dados carregados */}
       <DashboardTour
         userId={userId}
         menuAtivo={menuAtivo}
