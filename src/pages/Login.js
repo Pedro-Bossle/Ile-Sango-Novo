@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { PageMeta } from '../components/Seo/PageMeta';
+import {
+  checkAuthRateLimit,
+  clearAuthRateLimit,
+  recordAuthAttempt,
+} from '../utils/authRateLimit.ts';
 import './Auth.css';
 
 function getMensagemErroAuth(errorMessage) {
@@ -24,8 +29,8 @@ function getMensagemErroAuth(errorMessage) {
   }
   if (msg.includes('failed to fetch') || msg.includes('load failed') || msg.includes('networkerror')) {
     return (
-      'Nao foi possivel contactar o servidor (rede/DNS). Confira a internet, tente outro DNS (ex.: 8.8.8.8 ou 1.1.1.1), ' +
-      'desative VPN temporariamente e confirme se REACT_APP_SUPABASE_URL no .env.local coincide com o URL do projeto no painel do Supabase.'
+      'Nao foi possivel contactar o servidor. Confira a internet, tente outro DNS (ex.: 8.8.8.8), ' +
+      'desative VPN temporariamente e confirme a configuracao do projeto no painel do Supabase.'
     );
   }
   if (msg.includes('redirect') || msg.includes('invalid request')) {
@@ -59,7 +64,15 @@ const Login = () => {
     setError('');
     setMessage('');
 
+    const limit = checkAuthRateLimit('login');
+    if (!limit.ok) {
+      setError(limit.message);
+      setLoading(false);
+      return;
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
+    recordAuthAttempt('login');
     const { error: loginError } = await supabase.auth.signInWithPassword({
       email: normalizedEmail,
       password: senha,
@@ -71,6 +84,7 @@ const Login = () => {
       return;
     }
 
+    clearAuthRateLimit('login');
     setMessage('Login realizado com sucesso.');
     setLoading(false);
     navigate('/dashboard');
@@ -85,7 +99,14 @@ const Login = () => {
       return;
     }
 
+    const limit = checkAuthRateLimit('reset');
+    if (!limit.ok) {
+      setError(limit.message);
+      return;
+    }
+
     const normalizedEmail = email.trim().toLowerCase();
+    recordAuthAttempt('reset');
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
       redirectTo: getPasswordResetRedirectUrl(),
     });
@@ -113,6 +134,7 @@ const Login = () => {
           onChange={(e) => setEmail(e.target.value)}
           placeholder="seuemail@dominio.com"
           required
+          autoComplete="username"
         />
 
         <label htmlFor="senha">Senha</label>
@@ -124,6 +146,7 @@ const Login = () => {
             onChange={(e) => setSenha(e.target.value)}
             placeholder="Digite sua senha"
             required
+            autoComplete="current-password"
           />
           <button
             className="auth-toggle-button"
@@ -140,7 +163,7 @@ const Login = () => {
           {loading ? 'Entrando...' : 'Entrar'}
         </button>
 
-        <button className="auth-link-button" type="button" onClick={handleForgotPassword}>
+        <button className="auth-link-button" type="button" onClick={handleForgotPassword} disabled={loading}>
           Esqueci a senha
         </button>
 

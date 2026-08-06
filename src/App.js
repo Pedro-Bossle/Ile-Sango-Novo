@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
 import Layout from './components/Layout/Layout';
@@ -16,6 +16,7 @@ import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import Dashboard from './pages/Dashboard';
 
 function App() {
+  const location = useLocation();
   const lenisRef = useRef(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   useEffect(() => {
@@ -39,6 +40,26 @@ function App() {
       window.__lenis = null;
     };
   }, []);
+
+  useEffect(() => {
+    const lenis = lenisRef.current;
+    const onDashboard = location.pathname.startsWith('/dashboard');
+
+    // Lenis captura a roda do mouse no document e impede scroll nativo dos modais da dashboard.
+    if (lenis) {
+      if (onDashboard) lenis.stop();
+      else lenis.start();
+    }
+
+    if (onDashboard) return;
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo(0, 0);
+    }
+    setShowScrollTop(false);
+  }, [location.pathname]);
+
   const scrollToTop = useCallback(() => {
     lenisRef.current?.scrollTo(0, { duration: 1.2 });
   }, []);

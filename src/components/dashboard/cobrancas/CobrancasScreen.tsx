@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   cobrancaPassaFiltroIntervalo,
   deleteCobranca,
@@ -25,11 +25,6 @@ import { PaginationControls } from '../PaginationControls';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { resolvePessoaIdCobranca, type CobrancaTipo } from '../../../types/database';
-
-type LenisLike = {
-  stop?: () => void;
-  start?: () => void;
-};
 
 export function CobrancasScreen() {
   const [rows, setRows] = useState<CobrancaComMembro[]>([]);
@@ -138,20 +133,35 @@ export function CobrancasScreen() {
     localStorage.setItem('cobrancas_mostrar_pagas', mostrarPagas ? 'true' : 'false');
   }, [mostrarPagas]);
 
+  const reportModalRef = useRef<HTMLDivElement | null>(null);
+  const reportTableScrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Roda do mouse: scroll vertical do modal + horizontal da tabela (sem precisar de Shift).
   useEffect(() => {
-    const w = window as Window & { __lenis?: LenisLike | null };
-    const lenis = w.__lenis;
-    if (!lenis) return;
+    if (!reportOpen) return;
+    const modal = reportModalRef.current;
+    const tableScroll = reportTableScrollRef.current;
+    if (!modal) return;
 
-    if (reportOpen) {
-      lenis.stop?.();
-    } else {
-      lenis.start?.();
-    }
+    const onWheel = (e: WheelEvent) => {
+      const target = e.target as Node | null;
+      if (tableScroll?.contains(target) && tableScroll.scrollWidth > tableScroll.clientWidth) {
+        const delta = e.deltaX !== 0 ? e.deltaX : e.deltaY;
+        if (delta !== 0) {
+          e.preventDefault();
+          tableScroll.scrollLeft += delta;
+        }
+        return;
+      }
 
-    return () => {
-      lenis.start?.();
+      if (modal.scrollHeight > modal.clientHeight && e.deltaY !== 0) {
+        e.preventDefault();
+        modal.scrollTop += e.deltaY;
+      }
     };
+
+    modal.addEventListener('wheel', onWheel, { passive: false });
+    return () => modal.removeEventListener('wheel', onWheel);
   }, [reportOpen]);
 
   /** Soma dos saldos em aberto respeitando a mesma lista filtrada da tabela (período + nome). */
@@ -475,7 +485,7 @@ export function CobrancasScreen() {
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
       <h1>Cobranças</h1>
 
-      <div className="dash-filter-bar dash-filter-bar--periodo">
+      <div className="dash-filter-bar dash-filter-bar--periodo" data-tour="cobrancas-filtros">
         <div className="dash-cob-layout-row">
           <label className="dash-field dash-field--busca-membro">
             <span>Pesquisar por membro</span>
@@ -551,7 +561,7 @@ export function CobrancasScreen() {
             : null}{' '}
           {mostrarPagas ? 'Exibindo pagas e pendentes.' : 'Exibindo apenas pendentes.'}
         </p>
-        <div className="dash-section-actions">
+        <div className="dash-section-actions" data-tour="cobrancas-acoes">
           <button type="button" className="dash-btn-secondary" onClick={abrirCobrancaEmMassa}>
             Cobrar todos os membros
           </button>
@@ -578,15 +588,17 @@ export function CobrancasScreen() {
               </div>
             </div>
           )}
-          <CobrancasTable
-            rows={cobrancasPaginadas}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
-            onToggleSelectAllVisible={toggleSelectAllVisible}
-            onEdit={openEdit}
-            onDelete={setDeleteTarget}
-            onRefresh={reload}
-          />
+          <div data-tour="cobrancas-lista">
+            <CobrancasTable
+              rows={cobrancasPaginadas}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onToggleSelectAllVisible={toggleSelectAllVisible}
+              onEdit={openEdit}
+              onDelete={setDeleteTarget}
+              onRefresh={reload}
+            />
+          </div>
           <p className="dash-cob-subtotal" role="status">
             <strong>Subtotal em aberto (filtros atuais):</strong> {formatBRL(subtotalAberto)}
           </p>
@@ -721,20 +733,38 @@ export function CobrancasScreen() {
 
       {reportOpen && (
         <div className="dash-modal-overlay dash-modal-overlay--scrollable" role="dialog" aria-modal="true" onClick={() => setReportOpen(false)}>
-          <div className="dash-modal dash-modal--historico dash-modal--relatorio-pagos" onClick={(e) => e.stopPropagation()}>
-            <h2>Relatório de Valores Pagos</h2>
+          <div
+            ref={reportModalRef}
+            className="dash-modal dash-modal--historico dash-modal--relatorio-pagos"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="dash-modal__head">
+              <h2>Relatório de Valores Pagos</h2>
+              <button type="button" className="dash-modal__close" aria-label="Fechar" onClick={() => setReportOpen(false)}>
+                ×
+              </button>
+            </div>
             <div className="dash-modal-body-scroll">
-              <div className="dash-form-grid dash-form-grid--pair">
+              <div className="dash-relatorio-filtros">
                 <label className="dash-field">
-                  <span>Data inicial</span>
+                  <span>Data início</span>
                   <input type="date" value={reportFiltro.de} onChange={(e) => setReportFiltro((r) => ({ ...r, de: e.target.value }))} />
                 </label>
                 <label className="dash-field">
-                  <span>Data final</span>
+                  <span>Data fim</span>
                   <input type="date" value={reportFiltro.ate} onChange={(e) => setReportFiltro((r) => ({ ...r, ate: e.target.value }))} />
                 </label>
                 <label className="dash-field">
-                  <span>Membro (opcional)</span>
+                  <span>Tipo</span>
+                  <select value={reportFiltro.tipo} onChange={(e) => setReportFiltro((r) => ({ ...r, tipo: e.target.value as CobrancaTipo | '' }))}>
+                    <option value="">Todos</option>
+                    <option value="mensalidade">Mensalidade</option>
+                    <option value="obrigacao">Obrigação</option>
+                    <option value="outros">Outros</option>
+                  </select>
+                </label>
+                <label className="dash-field">
+                  <span>Membro</span>
                   <select value={reportFiltro.pessoaId} onChange={(e) => setReportFiltro((r) => ({ ...r, pessoaId: e.target.value }))}>
                     <option value="">Todos</option>
                     {pessoasRelatorio.map((p) => (
@@ -744,26 +774,27 @@ export function CobrancasScreen() {
                     ))}
                   </select>
                 </label>
-                <label className="dash-field">
-                  <span>Tipo (opcional)</span>
-                  <select value={reportFiltro.tipo} onChange={(e) => setReportFiltro((r) => ({ ...r, tipo: e.target.value as CobrancaTipo | '' }))}>
-                    <option value="">Todos</option>
-                    <option value="mensalidade">Mensalidade</option>
-                    <option value="obrigacao">Obrigação</option>
-                    <option value="outros">Outros</option>
-                  </select>
-                </label>
-              </div>
-              <div className="dash-form-actions">
-                <button type="button" className="dash-btn-primary" onClick={() => void carregarRelatorioValoresPagos()} disabled={reportLoading}>
-                  {reportLoading ? 'Carregando…' : 'Aplicar filtros'}
-                </button>
-                <button type="button" className="dash-btn-secondary" onClick={exportarRelatorioPdf} disabled={!reportRows.length}>
-                  Exportar PDF
-                </button>
-                <button type="button" className="dash-btn-secondary" onClick={exportarRelatorioCsv} disabled={!reportRows.length}>
-                  Exportar Excel (CSV)
-                </button>
+                <div className="dash-field dash-relatorio-filtros__action">
+                  <span className="dash-relatorio-filtros__action-label" aria-hidden="true">
+                    &nbsp;
+                  </span>
+                  <button type="button" className="dash-btn-primary" onClick={() => void carregarRelatorioValoresPagos()} disabled={reportLoading}>
+                    {reportLoading ? 'Carregando…' : 'Aplicar'}
+                  </button>
+                </div>
+                <div className="dash-field dash-relatorio-filtros__exports">
+                  <span className="dash-relatorio-filtros__action-label" aria-hidden="true">
+                    &nbsp;
+                  </span>
+                  <div className="dash-relatorio-filtros__export-btns">
+                    <button type="button" className="dash-btn-secondary" onClick={exportarRelatorioCsv} disabled={!reportRows.length}>
+                      Exportar Excel (CSV)
+                    </button>
+                    <button type="button" className="dash-btn-secondary" onClick={exportarRelatorioPdf} disabled={!reportRows.length}>
+                      Exportar PDF
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="dash-hist-resumo">
                 <p>
@@ -782,7 +813,7 @@ export function CobrancasScreen() {
                     .join(' | ') || '—'}
                 </p>
               </div>
-              <div className="dash-table-scroll">
+              <div className="dash-table-scroll" ref={reportTableScrollRef}>
                 <table className="dash-table">
                   <thead>
                     <tr>

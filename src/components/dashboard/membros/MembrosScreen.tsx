@@ -554,7 +554,7 @@ export function MembrosScreen() {
     <>
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
       <h1>Membros</h1>
-      <div className="dash-section-header">
+      <div className="dash-section-header" data-tour="membros-filtros">
         <div className="dash-filtros">
           <input
             placeholder={BUSCA_MEMBROS_PLACEHOLDER}
@@ -563,12 +563,12 @@ export function MembrosScreen() {
             aria-label={BUSCA_MEMBROS_PLACEHOLDER}
           />
         </div>
-        <button type="button" className="dash-add-button" onClick={openCreate}>
+        <button type="button" className="dash-add-button" data-tour="membros-adicionar" onClick={openCreate}>
           Adicionar membro
         </button>
       </div>
 
-      <div className="dash-filtros-mobile">
+      <div className="dash-filtros-mobile" data-tour="membros-filtros-mobile">
         <input
           placeholder={BUSCA_MEMBROS_PLACEHOLDER}
           value={busca}
@@ -581,7 +581,7 @@ export function MembrosScreen() {
         <p>Carregando…</p>
       ) : (
         <>
-          <div className="dash-table-scroll">
+          <div className="dash-table-scroll" data-tour="membros-lista">
             <table className="dash-table dash-table--membros">
               <thead>
                 <tr>
