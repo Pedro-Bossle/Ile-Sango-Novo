@@ -20,7 +20,18 @@ function App() {
   const location = useLocation();
   const lenisRef = useRef(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  // Lenis só no site público. Na dashboard, `stop()` aplica overflow:clip e
+  // preventDefault na roda — bloqueia o scroll nativo (ex.: editar membro).
   useEffect(() => {
+    const onDashboard = location.pathname.startsWith('/dashboard');
+    setShowScrollTop(false);
+
+    if (onDashboard) {
+      window.scrollTo(0, 0);
+      return;
+    }
+
     const lenis = new Lenis();
     lenisRef.current = lenis;
     window.__lenis = lenis;
@@ -34,31 +45,14 @@ function App() {
       setShowScrollTop(lenis.scroll > 200);
     };
     lenis.on('scroll', onScroll);
+    lenis.scrollTo(0, { immediate: true });
+
     return () => {
       cancelAnimationFrame(rafId);
       lenis.destroy();
       lenisRef.current = null;
       window.__lenis = null;
     };
-  }, []);
-
-  useEffect(() => {
-    const lenis = lenisRef.current;
-    const onDashboard = location.pathname.startsWith('/dashboard');
-
-    // Lenis captura a roda do mouse no document e impede scroll nativo dos modais da dashboard.
-    if (lenis) {
-      if (onDashboard) lenis.stop();
-      else lenis.start();
-    }
-
-    if (onDashboard) return;
-    if (lenis) {
-      lenis.scrollTo(0, { immediate: true });
-    } else {
-      window.scrollTo(0, 0);
-    }
-    setShowScrollTop(false);
   }, [location.pathname]);
 
   const scrollToTop = useCallback(() => {

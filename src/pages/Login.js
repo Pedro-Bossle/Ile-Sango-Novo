@@ -125,12 +125,25 @@ const Login = () => {
       redirectTo: getPasswordResetRedirectUrl(),
     });
 
+    const mensagemNeutra =
+      'Se o email acima tiver acesso elegivel, enviaremos um link de redefinicao de senha.';
+
     if (resetError) {
+      const msg = (resetError.message || '').toLowerCase();
+      // Nao revelar se o email existe / tem conta.
+      if (
+        msg.includes('user not found') ||
+        msg.includes('email not found') ||
+        msg.includes('unable to validate email')
+      ) {
+        setMessage(mensagemNeutra);
+        return;
+      }
       setError(getMensagemErroAuth(resetError.message));
       return;
     }
 
-    setMessage('Enviamos um link de redefinicao de senha para seu email.');
+    setMessage(mensagemNeutra);
   };
 
   return (
