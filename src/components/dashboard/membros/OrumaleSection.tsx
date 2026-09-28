@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { fetchQualidadesPorOrixa } from '../../../services/orixasQualidades';
 import { fetchSobrenomesOrisa, type SobrenomeOrisaRow } from '../../../services/sobrenomesOrisa';
 import type { Orixa, Qualidade } from '../../../types/database';
@@ -98,6 +99,30 @@ function OrumaleRowEditor({ row, orixas, removeRow, updateRow }: RowEditorProps)
   const disabledQual = !orixaId || loadingQual;
   const disabledSobrenome = !orixaId || loadingSob || (!orixaSemQualidades && !qualidadeId);
 
+  const orixaOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: '—' },
+      ...orixas.map((o) => ({ value: String(o.id), label: o.nome })),
+    ],
+    [orixas],
+  );
+
+  const qualidadeOptions = useMemo((): SearchableSelectOption[] => {
+    const emptyLabel = disabledQual && orixaId ? (loadingQual ? 'Carregando…' : '—') : '—';
+    return [
+      { value: '', label: emptyLabel, disabled: loadingQual && !!orixaId },
+      ...qualidades.map((q) => ({ value: String(q.id), label: q.nome })),
+    ];
+  }, [qualidades, disabledQual, orixaId, loadingQual]);
+
+  const sobrenomeOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: '—' },
+      ...sobrenomes.map((s) => ({ value: String(s.id), label: s.nome })),
+    ],
+    [sobrenomes],
+  );
+
   const openHistory = () => {
     if (!row.id) return;
     setHistoryOpen(true);
@@ -194,70 +219,53 @@ function OrumaleRowEditor({ row, orixas, removeRow, updateRow }: RowEditorProps)
         </button>
       </div>
 
-      <div className="dash-orixa-pair">
-        <h3 className="dash-orixa-pair__label">Orisá e qualidade</h3>
-        <div className="dash-form-grid">
+      <div className="dash-orumale-row4">
           <label className="dash-field">
             <span>Orisá</span>
-            <select
+            <SearchableSelect
+              options={orixaOptions}
               value={orixaId}
-              onChange={(e) =>
-                updateRow(row.key, { orixa_id: e.target.value, qualidade_id: '', sobrenome_orisa_id: '' })
-              }
-            >
-              <option value="">—</option>
-              {orixas.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => updateRow(row.key, { orixa_id: v, qualidade_id: '', sobrenome_orisa_id: '' })}
+              searchPlaceholder="Buscar orisá…"
+              aria-label="Orisá"
+            />
           </label>
           <label className="dash-field">
             <span>Qualidade</span>
-            <select
+            <SearchableSelect
+              options={qualidadeOptions}
               value={qualidadeId}
               disabled={disabledQual}
-              onChange={(e) => updateRow(row.key, { qualidade_id: e.target.value, sobrenome_orisa_id: '' })}
-            >
-              <option value="">{disabledQual && orixaId ? (loadingQual ? 'Carregando…' : '—') : '—'}</option>
-              {qualidades.map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => updateRow(row.key, { qualidade_id: v, sobrenome_orisa_id: '' })}
+              placeholder={loadingQual && orixaId ? 'Carregando…' : '—'}
+              searchPlaceholder="Buscar qualidade…"
+              aria-label="Qualidade"
+            />
           </label>
           <label className="dash-field">
             <span>Sobrenome</span>
-            <select
+            <SearchableSelect
+              options={sobrenomeOptions}
               value={row.sobrenome_orisa_id}
               disabled={disabledSobrenome}
-              onChange={(e) => updateRow(row.key, { sobrenome_orisa_id: e.target.value })}
-              aria-busy={loadingSob}
-            >
-              <option value="">—</option>
-              {sobrenomes.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.nome}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => updateRow(row.key, { sobrenome_orisa_id: v })}
+              searchPlaceholder="Buscar sobrenome…"
+              aria-label="Sobrenome"
+            />
+          </label>
+          <label className="dash-field">
+            <span>Digina</span>
+            <input
+              type="text"
+              value={row.digina}
+              onChange={(e) => updateRow(row.key, { digina: e.target.value })}
+            />
           </label>
         </div>
-      </div>
 
-      <div className="dash-form-grid">
+      <div className="dash-orumale-row2">
         <label className="dash-field">
-          <span>Digina</span>
-          <input
-            type="text"
-            value={row.digina}
-            onChange={(e) => updateRow(row.key, { digina: e.target.value })}
-          />
-        </label>
-        <label className="dash-field">
-          <span>Data feitura</span>
+          <span>Data da Feitura</span>
           <input
             type="date"
             value={row.data_feitura}

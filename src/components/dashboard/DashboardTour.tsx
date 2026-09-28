@@ -11,11 +11,19 @@ export const DASH_TOUR_USER_ID = 'fd74d483-f27a-499f-9e2a-d1226922f5eb';
 
 export const TOUR_SCREEN_LABELS: Record<string, string> = {
   'visao-geral': 'Visão geral',
-  eventos: 'Eventos',
+  eventos: 'Agenda',
   catalogo: 'Catálogo',
   membros: 'Membros',
-  cobrancas: 'Cobranças',
+  cobrancas: 'Obrigações',
+  mensalidades: 'Mensalidades',
+  atrasados: 'Atrasados',
+  caixa: 'Fluxo de caixa',
+  clientes: 'Clientes',
+  orcamentos: 'Orçamentos',
+  agenda: 'Agenda',
+  'dados-ile': 'Dados do Ilê',
   orixas: 'Orixás',
+  acessos: 'Acessos',
 };
 
 export function tourButtonLabel(menuAtivo: string): string {
@@ -69,29 +77,40 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         placement: 'center',
         title: 'Visão geral',
         content:
-          'Esta é a tela inicial da área restrita. Aqui você vê um resumo rápido do terreiro: totais, finanças e próximos eventos.',
+          'Resumo do terreiro em cartões: próximo compromisso, saldo do mês, mensalidades, próximo evento e aniversariantes.',
         skipScroll: true,
       },
       {
         target: '[data-tour="stats"]',
         placement: 'bottom',
         title: 'Indicadores',
-        content:
-          'Cobranças, catálogo, membros, entradas dos últimos 30 dias e valores em aberto — tudo na primeira linha.',
+        content: 'Toque em um cartão para ir direto à Agenda, Caixa, Mensalidades ou Obrigações.',
+      },
+      {
+        target: '[data-tour="atendimento-hoje"]',
+        placement: 'bottom',
+        title: 'Próximo compromisso',
+        content: 'Mostra o próximo compromisso de atendimento. Toque para abrir a Agenda unificada.',
+      },
+      {
+        target: '[data-tour="aniversarios-mes"]',
+        placement: 'top',
+        title: 'Aniversários',
+        content: 'Aniversariantes do mês: nome à esquerda e data à direita. Datas já passadas aparecem riscadas.',
       },
       {
         target: '[data-tour="proximos-eventos"]',
         placement: 'top',
-        title: 'Próximos eventos',
-        content: 'Os próximos eventos cadastrados aparecem aqui para consulta rápida.',
+        title: 'Próximo evento',
+        content: 'O próximo evento da casa. Toque para abrir a Agenda (eventos e compromissos).',
       },
       withSidebar({
         target: '[data-tour="sidebar"]',
         placement: isMobileViewport() ? 'left' : 'right',
         title: 'Menu lateral',
         content: isMobileViewport()
-          ? 'No celular, abra o menu pelo botão ☰ no canto. Use-o para trocar de tela: Eventos, Catálogo, Membros, Cobranças e Orixás.'
-          : 'Use a barra lateral para navegar entre as telas. Passe o mouse para expandir ou fixe com o pin.',
+          ? 'No celular, abra o menu pelo ☰. Grupos: Financeiro, Atendimento e Configurações.'
+          : 'Navegue por Financeiro, Atendimento e Configurações. Passe o mouse para expandir ou fixe com o pin.',
       }),
     ];
 
@@ -101,7 +120,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
           target: '[data-tour="sidebar-pin"]',
           placement: 'right',
           title: 'Fixar menu',
-          content: 'No desktop, fixe a barra para mantê-la aberta enquanto trabalha.',
+          content: 'No computador, fixe a barra para mantê-la aberta enquanto trabalha.',
         }),
       );
     }
@@ -119,42 +138,33 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
     return steps;
   }
 
-  if (screen === 'eventos') {
-    const filtrosTarget = isMobileViewport()
-      ? '[data-tour="eventos-filtros-mobile"]'
-      : '[data-tour="eventos-filtros"]';
+  if (screen === 'eventos' || screen === 'agenda') {
     return [
       {
         target: 'body',
         placement: 'center',
-        title: 'Eventos',
-        content: 'Nesta tela você gerencia a agenda do terreiro: criar, editar, pesquisar e excluir eventos.',
+        title: 'Agenda',
+        content:
+          'Calendário unificado: eventos da casa (E) e compromissos de atendimento (C). Nos compromissos aparece o nome de quem criou.',
         skipScroll: true,
       },
       {
-        target: filtrosTarget,
+        target: '[data-tour="calendario-filtros"]',
         placement: 'bottom',
-        title: 'Pesquisa e filtros',
-        content: 'Filtre por texto ou local para achar eventos rapidamente.',
+        title: 'Filtros',
+        content: 'Pesquise por título/local, filtre só eventos ou só compromissos, ou por usuário que criou.',
       },
       {
-        target: '[data-tour="eventos-enderecos"]',
-        placement: 'bottom',
-        title: 'Endereços padrão',
-        content:
-          'Configure endereços reutilizáveis. No formulário do evento, ao digitar no campo Endereço, as sugestões aparecem automaticamente.',
-      },
-      {
-        target: '[data-tour="eventos-adicionar"]',
-        placement: 'bottom',
-        title: 'Adicionar evento',
-        content: 'Abre o formulário para cadastrar título, data, horário, tipo, endereço e descrição.',
-      },
-      {
-        target: '[data-tour="eventos-lista"]',
+        target: '[data-tour="eventos-calendario"]',
         placement: 'top',
-        title: 'Lista de eventos',
-        content: 'Cada card mostra os dados do evento com ações de Editar e Excluir.',
+        title: 'Calendário',
+        content: 'Navegue pelos meses. Clique num dia para escolher Evento ou Compromisso; clique num chip para editar.',
+      },
+      {
+        target: '[data-tour="eventos-toolbar"]',
+        placement: 'bottom',
+        title: 'Ações',
+        content: 'Endereços padrão, novo evento da casa ou novo compromisso de atendimento.',
       },
     ];
   }
@@ -168,26 +178,26 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         target: 'body',
         placement: 'center',
         title: 'Catálogo',
-        content: 'Gerencie os itens do catálogo do terreiro: nomes, categorias, valores e variações.',
+        content: 'Itens usados em orçamentos e serviços: nomes, categorias, valores e variações.',
         skipScroll: true,
       },
       {
         target: filtrosTarget,
         placement: 'bottom',
         title: 'Pesquisa e categorias',
-        content: 'Pesquise por nome/descrição e filtre por categoria.',
+        content: 'Busque por nome ou descrição e filtre por categoria.',
       },
       {
         target: '[data-tour="catalogo-adicionar"]',
         placement: 'bottom',
         title: 'Adicionar item',
-        content: 'Cadastre um novo item do catálogo pelo formulário.',
+        content: 'Cadastre um novo item do catálogo.',
       },
       {
         target: '[data-tour="catalogo-lista"]',
         placement: 'top',
         title: 'Itens cadastrados',
-        content: 'Os cards listam cada item com opções de Editar e Excluir.',
+        content: 'Cada card tem opções de Editar e Excluir.',
       },
     ];
   }
@@ -202,26 +212,59 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         placement: 'center',
         title: 'Membros',
         content:
-          'Cadastro completo dos membros: dados pessoais, orixás, orumalé, exus, umbanda e vínculo com cobranças.',
+          'Cadastro completo: dados pessoais, orixás, orumalé, exus, umbanda e vínculo com cobranças. A ficha usa a largura toda da tela.',
         skipScroll: true,
       },
       {
         target: filtrosTarget,
         placement: 'bottom',
-        title: 'Pesquisar membros',
-        content: 'Busque por nome, orisá de cabeça ou telefone.',
+        title: 'Busca e atalhos',
+        content:
+          'Pesquise por nome, orisá ou telefone. Use “Ver inativados” para restaurar quem saiu da lista ativa. O menu Excel exporta modelo ou importa planilha.',
       },
       {
         target: '[data-tour="membros-adicionar"]',
         placement: 'bottom',
-        title: 'Adicionar membro',
-        content: 'Abre o formulário completo para incluir um novo membro.',
+        title: 'Novo membro',
+        content: 'Abre a ficha completa para incluir alguém. No final, Salvar fica no botão flutuante.',
       },
       {
         target: '[data-tour="membros-lista"]',
         placement: 'top',
-        title: 'Lista de membros',
-        content: 'Toque em uma linha para editar. Ordene pelas colunas e acompanhe a situação financeira.',
+        title: 'Lista',
+        content:
+          'Toque numa linha para editar. Ordene pelas colunas e veja a situação financeira. Inativar remove da lista ativa (pode restaurar depois).',
+      },
+    ];
+  }
+
+  if (screen === 'mensalidades') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Mensalidades',
+        content:
+          'Grade anual por membro: A (aberto), P (pago), I (isento), D (desligado). Inativos não geram mensalidade a partir da data de inativação.',
+        skipScroll: true,
+      },
+      {
+        target: '.dash-mens__toolbar',
+        placement: 'bottom',
+        title: 'Ano e pagamento',
+        content: 'Troque o ano, busque pelo nome e defina a data do pagamento. “Sem fluxo de caixa” evita lançar entrada automática.',
+      },
+      {
+        target: '.dash-mens__kpis',
+        placement: 'bottom',
+        title: 'Resumo',
+        content: 'Recebido, em aberto e atrasado (após o dia 15) do ano selecionado.',
+      },
+      {
+        target: '.dash-mens__table-wrap',
+        placement: 'top',
+        title: 'Grade',
+        content: 'Clique numa célula para alterar o status. Membros inativos no ano seguinte não aparecem na lista.',
       },
     ];
   }
@@ -231,27 +274,204 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
       {
         target: 'body',
         placement: 'center',
-        title: 'Cobranças',
-        content: 'Controle mensalidades e obrigações: filtros, pagamentos, lotes e relatórios.',
+        title: 'Obrigações',
+        content: 'Obrigações e cobranças pontuais: filtros, pagamentos, lotes, WhatsApp/e-mail e relatórios.',
         skipScroll: true,
       },
       {
         target: '[data-tour="cobrancas-filtros"]',
         placement: 'bottom',
         title: 'Filtros e período',
-        content: 'Filtre por membro, período e visualize cobranças pagas ou em aberto.',
+        content: 'Busque por membro, defina De/Até, “vence esta semana” e veja pagas ou em aberto.',
       },
       {
         target: '[data-tour="cobrancas-acoes"]',
         placement: 'bottom',
         title: 'Ações',
-        content: 'Crie cobranças individuais ou em massa e acesse relatórios de valores pagos.',
+        content: 'Crie obrigação individual ou em massa e abra o relatório de valores pagos.',
       },
       {
         target: '[data-tour="cobrancas-lista"]',
         placement: 'top',
-        title: 'Tabela de cobranças',
-        content: 'Acompanhe saldos, registre pagamentos, edite ou exclua. No mobile, role horizontalmente a tabela.',
+        title: 'Tabela',
+        content: 'Registre pagamento, envie WhatsApp/e-mail e edite. No celular, role a tabela para o lado.',
+      },
+    ];
+  }
+
+  if (screen === 'atrasados') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Atrasados',
+        content:
+          'Quem está com cobrança em aberto ou atrasada. Ideal para cobrança rápida com mensagem pronta e Pix.',
+        skipScroll: true,
+      },
+      {
+        target: '[data-tour="atrasados-toolbar"]',
+        placement: 'bottom',
+        title: 'Filtros',
+        content: 'Escolha o ano, busque pelo nome, marque “Só atrasados” e gere o relatório.',
+      },
+      {
+        target: '[data-tour="atrasados-kpis"]',
+        placement: 'bottom',
+        title: 'Resumo',
+        content: 'Quantidade de membros na lista, quantos têm atraso e o total em aberto.',
+      },
+      {
+        target: '[data-tour="atrasados-lista"]',
+        placement: 'top',
+        title: 'Lista por membro',
+        content: 'Copie a mensagem ou abra o WhatsApp. O texto já inclui o valor e a chave Pix do Ilê (se cadastrada).',
+      },
+    ];
+  }
+
+  if (screen === 'caixa') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Fluxo de caixa',
+        content:
+          'Entradas e saídas do período — incluindo pagamentos sincronizados das cobranças — e lançamentos manuais.',
+        skipScroll: true,
+      },
+      {
+        target: '[data-tour="caixa-toolbar"]',
+        placement: 'bottom',
+        title: 'Ferramentas',
+        content: 'Busque, filtre por ano/categoria, exporte Excel ou PDF e gerencie as categorias do caixa.',
+      },
+      {
+        target: '[data-tour="caixa-kpis"]',
+        placement: 'bottom',
+        title: 'Indicadores',
+        content: 'Restante do ano anterior, entradas, saídas, resultado do período e saldo atual.',
+      },
+      {
+        target: '[data-tour="caixa-meses"]',
+        placement: 'top',
+        title: 'Lançamentos por mês',
+        content:
+          'Expanda um mês para ver a tabela. Edite ou exclua lançamentos manuais. Use “+ Novo lançamento” no topo para criar.',
+      },
+    ];
+  }
+
+  if (screen === 'clientes') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Clientes',
+        content:
+          'Lista em largura total. Abra um cliente para ver Ficha, Ações (editar, visita, WhatsApp…) e Visitas.',
+        skipScroll: true,
+      },
+      {
+        target: '[data-tour="atendimento-clientes-filtros"]',
+        placement: 'bottom',
+        title: 'Busca e filtros',
+        content: 'Busque por nome, WhatsApp ou e-mail. Filtre “Só em aberto” ou “Ver inativados”.',
+      },
+      {
+        target: '[data-tour="atendimento-clientes-lista"]',
+        placement: 'top',
+        title: 'Tabela de clientes',
+        content: 'Toque numa linha para abrir. Use as abas Ficha, Ações e Visitas.',
+      },
+    ];
+  }
+
+  if (screen === 'orcamentos') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Orçamentos',
+        content: 'Monte propostas com itens do catálogo, envie por WhatsApp/e-mail, duplique e acompanhe o status.',
+        skipScroll: true,
+      },
+      {
+        target: '[data-tour="orcamentos-novo"]',
+        placement: 'bottom',
+        title: 'Novo orçamento',
+        content: 'Abre o formulário: escolha o cliente, o título e os itens do catálogo.',
+      },
+      {
+        target: '[data-tour="orcamentos-lista"]',
+        placement: 'top',
+        title: 'Orçamentos salvos',
+        content: 'Cada card mostra status e total. Duplicar cria uma cópia; Excluir remove da lista ativa.',
+      },
+    ];
+  }
+
+  if (screen === 'dados-ile') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Dados do Ilê',
+        content:
+          'Identidade da casa: nome, logo, Pix (chave + QR Code PNG) e endereço. Usados em cobranças, recibos e PDFs.',
+        skipScroll: true,
+      },
+      {
+        target: '[data-tour="dados-ile-identidade"]',
+        placement: 'bottom',
+        title: 'Identidade',
+        content: 'Nome do Ilê e logo (opcional). A logo aparece em relatórios e no recibo de atendimento.',
+      },
+      {
+        target: '[data-tour="dados-ile-pix"]',
+        placement: 'bottom',
+        title: 'Pix e QR Code',
+        content:
+          'Tipo e chave Pix para WhatsApp. Envie o PNG do QR Code — ele entra no recibo PDF de cada visita.',
+      },
+      {
+        target: '[data-tour="dados-ile-endereco"]',
+        placement: 'top',
+        title: 'Endereço',
+        content: 'Informe o CEP para preencher rua, bairro, cidade e UF automaticamente. Depois ajuste o número se precisar.',
+      },
+    ];
+  }
+
+  if (screen === 'acessos') {
+    return [
+      {
+        target: 'body',
+        placement: 'center',
+        title: 'Acessos de Admin',
+        content:
+          'Defina o que cada pessoa pode fazer em cada tela (ver, criar, editar, excluir, enviar). Só administradores alteram acessos.',
+        skipScroll: true,
+      },
+      {
+        target: '[data-tour="acessos-abas"]',
+        placement: 'bottom',
+        title: 'Duas abas',
+        content:
+          '“Pessoas e permissões” para editar acessos. “Histórico de alterações” mostra quem mudou o quê (antigo → atual).',
+      },
+      {
+        target: '[data-tour="acessos-pessoas"]',
+        placement: 'right',
+        title: 'Lista de pessoas',
+        content: 'Escolha alguém à esquerda. À direita: nome de exibição, administrador, conta ativa e permissões.',
+      },
+      {
+        target: '[data-tour="acessos-admin"]',
+        placement: 'bottom',
+        title: 'Como configurar',
+        content:
+          'Defina o nome (aparece nos compromissos da Agenda). Use um atalho pronto e ajuste tela a tela. Salve no botão do topo.',
       },
     ];
   }
@@ -262,26 +482,26 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         target: 'body',
         placement: 'center',
         title: 'Orixás',
-        content: 'Configure o catálogo espiritual: orixás, qualidades e diginas usados nos cadastros.',
+        content: 'Catálogo espiritual: orixás, qualidades e diginas usados nas fichas de membros.',
         skipScroll: true,
       },
       {
         target: '[data-tour="orixas-abas"]',
         placement: 'bottom',
         title: 'Abas',
-        content: 'Alterne entre Orixás, Qualidades e Diginas. Qualidades e diginas dependem do orixá selecionado.',
+        content: 'Alterne entre Orixás, Qualidades e Diginas. Qualidades e diginas dependem do orixá escolhido.',
       },
       {
         target: '[data-tour="orixas-toolbar"]',
         placement: 'bottom',
         title: 'Busca e inclusão',
-        content: 'Pesquise itens e adicione novos registros. Em Qualidades/Diginas, escolha o orixá no filtro.',
+        content: 'Pesquise e adicione registros. Em Qualidades/Diginas, filtre pelo orixá.',
       },
       {
         target: '[data-tour="orixas-lista"]',
         placement: 'top',
-        title: 'Lista configurável',
-        content: 'Edite ou exclua cada item. Em orixás, toque no nome para ir às qualidades daquele orixá.',
+        title: 'Lista',
+        content: 'Edite ou exclua. Em orixás, toque no nome para ir às qualidades daquele orixá.',
       },
     ];
   }

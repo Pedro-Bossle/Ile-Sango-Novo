@@ -26,16 +26,16 @@ export function CobrancasReadOnlySummary({ cobrancas, onEdit, onDelete }: Props)
   if (cobrancas.length === 0) {
     return (
       <section className="dash-form-section">
-        <h2 className="dash-form-section__title">Cobranças</h2>
-        <p className="dash-muted">Nenhuma cobrança associada. As cobranças são geridas no ecrã Cobranças.</p>
+        <h2 className="dash-form-section__title">Obrigações</h2>
+        <p className="dash-muted">Nenhuma obrigação associada. As obrigações são geridas no ecrã Obrigações.</p>
       </section>
     );
   }
 
   return (
     <section className="dash-form-section">
-      <h2 className="dash-form-section__title">Cobranças (resumo)</h2>
-      <p className="dash-muted">Edite ou exclua por linha; para a lista completa use o menu Cobranças.</p>
+      <h2 className="dash-form-section__title">Obrigações (resumo)</h2>
+      <p className="dash-muted">Edite ou exclua por linha; para a lista completa use o menu Obrigações.</p>
       <div className="dash-table-scroll">
         <table className="dash-table dash-table--cobrancas-resumo">
           <thead>

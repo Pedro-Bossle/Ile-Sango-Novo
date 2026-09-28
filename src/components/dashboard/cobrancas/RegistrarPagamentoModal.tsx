@@ -2,6 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { CobrancaComMembro } from '../../../services/cobrancas';
 import { isMensalidadeTipo, registrarPagamento, valorSaldoCobranca } from '../../../services/cobrancas';
 import { resolvePessoaIdCobranca, type UUID } from '../../../types/database';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
+
+const FORMA_PAGAMENTO_OPTIONS: SearchableSelectOption[] = [
+  { value: 'PIX', label: 'PIX' },
+  { value: 'Dinheiro', label: 'Dinheiro' },
+  { value: 'Cartão', label: 'Cartão' },
+  { value: 'Transferência', label: 'Transferência' },
+];
 
 type Props = {
   open: boolean;
@@ -88,12 +96,12 @@ export function RegistrarPagamentoModal({ open, cobranca, onClose, onSaved }: Pr
           </label>
           <label className="dash-field">
             <span>Forma de pagamento</span>
-            <select value={formaPagamento} onChange={(e) => setFormaPagamento(e.target.value)}>
-              <option value="PIX">PIX</option>
-              <option value="Dinheiro">Dinheiro</option>
-              <option value="Cartão">Cartão</option>
-              <option value="Transferência">Transferência</option>
-            </select>
+            <SearchableSelect
+              options={FORMA_PAGAMENTO_OPTIONS}
+              value={formaPagamento}
+              onChange={setFormaPagamento}
+              aria-label="Forma de pagamento"
+            />
           </label>
           <label className="dash-field dash-field--full">
             <span>Observação</span>

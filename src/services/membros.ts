@@ -135,15 +135,20 @@ async function mapOrixaNomes(ids: (string | null)[]): Promise<Map<string, string
 
 
 
-export async function fetchPessoasLista(): Promise<PessoaListaItem[]> {
+export async function fetchPessoasLista(includeDeleted = false): Promise<PessoaListaItem[]> {
 
-  const { data: pessoas, error: e1 } = await supabase
+  let q = supabase
 
     .from('pessoas')
 
-    .select('id, nome, data_nascimento, contato, email, signo, obs')
+    .select('id, nome, data_nascimento, data_entrada, contato, email, signo, obs, deleted_at')
 
     .order('nome', { ascending: true });
+
+  if (includeDeleted) q = q.not('deleted_at', 'is', null);
+  else q = q.is('deleted_at', null);
+
+  const { data: pessoas, error: e1 } = await q;
 
   if (e1) throw new Error(e1.message);
 
@@ -219,7 +224,7 @@ export async function fetchPessoaCompleta(id: UUID): Promise<PessoaCompleta> {
 
   ] = await Promise.all([
 
-    supabase.from('pessoas').select('id, nome, data_nascimento, contato, email, signo, obs').eq('id', id).maybeSingle(),
+    supabase.from('pessoas').select('id, nome, data_nascimento, data_entrada, contato, email, signo, obs').eq('id', id).maybeSingle(),
 
     supabase.from('cadastro_orixas').select('*').eq('pessoa_id', id).maybeSingle(),
 
@@ -295,6 +300,8 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
     nome: nullIfEmpty(pessoa.nome) ?? '',
 
     data_nascimento: nullIfEmpty(pessoa.data_nascimento),
+
+    data_entrada: nullIfEmpty(pessoa.data_entrada),
 
     contato: nullIfEmpty(pessoa.contato),
 
@@ -564,11 +571,16 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
 
 
 export async function deletePessoa(id: UUID): Promise<void> {
-
-  const { error } = await supabase.from('pessoas').delete().eq('id', id);
-
+  const { error } = await supabase
+    .from('pessoas')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id);
   if (error) throw new Error(error.message);
+}
 
+export async function restorePessoa(id: UUID): Promise<void> {
+  const { error } = await supabase.from('pessoas').update({ deleted_at: null }).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 type NomePorId = Record<string, string>;

@@ -3,21 +3,15 @@ export type UUID = string;
 
 
 export interface Pessoa {
-
   id: UUID;
-
   nome: string;
-
   data_nascimento: string | null;
-
+  data_entrada?: string | null;
   contato: string | null;
-
   email: string | null;
-
   signo: string | null;
-
   obs: string | null;
-
+  deleted_at?: string | null;
 }
 
 

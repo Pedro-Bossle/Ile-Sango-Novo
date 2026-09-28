@@ -2,13 +2,29 @@ import { supabase } from '../lib/supabaseClient';
 import type { Cobranca, CobrancaTipo, PagamentoHistorico, Pessoa, UUID } from '../types/database';
 import { resolvePessoaIdCobranca } from '../types/database';
 
-export type CobrancaComMembro = Cobranca & { membro_nome: string };
+export type CobrancaComMembro = Cobranca & {
+  membro_nome: string;
+  membro_contato?: string | null;
+  membro_email?: string | null;
+  membro_data_entrada?: string | null;
+};
 
 const COBRANCA_SELECT =
   'id, valor, valor_total, valor_pago, valor_saldo, tipo, vencimento, descricao, membro, membro_id, pessoa_id, created_at, deleted_at';
 
 function mapNomePessoa(pessoas: Pessoa[]): Map<string, string> {
   return new Map(pessoas.map((p) => [p.id, p.nome]));
+}
+
+/** Cobrança/obrigação só conta a partir da data de entrada (iniciação). Sem entrada = legado (conta). */
+export function cobrancaAposEntrada(
+  vencimento: string | null | undefined,
+  dataEntrada: string | null | undefined,
+): boolean {
+  if (!dataEntrada) return true;
+  const venc = (vencimento ?? '').slice(0, 10);
+  if (!venc) return true;
+  return venc >= dataEntrada.slice(0, 10);
 }
 
 export function valorTotalCobranca(c: Cobranca): number {
@@ -66,17 +82,38 @@ export function isMensalidadeTipo(c: Cobranca): boolean {
 export async function fetchCobrancasComMembros(): Promise<CobrancaComMembro[]> {
   const [{ data: cobrancas, error: e1 }, { data: pessoas, error: e2 }] = await Promise.all([
     supabase.from('cobrancas').select(COBRANCA_SELECT).is('deleted_at', null).order('vencimento', { ascending: true }),
-    supabase.from('pessoas').select('id, nome'),
+    supabase.from('pessoas').select('id, nome, contato, email, data_entrada').is('deleted_at', null),
   ]);
   if (e1) throw new Error(e1.message);
   if (e2) throw new Error(e2.message);
-  const nomes = mapNomePessoa((pessoas ?? []) as Pessoa[]);
+  const pessoasList = (pessoas ?? []) as Pessoa[];
+  const nomes = mapNomePessoa(pessoasList);
+  const contatos = new Map(pessoasList.map((p) => [p.id, p.contato]));
+  const emails = new Map(pessoasList.map((p) => [p.id, p.email]));
+  const entradas = new Map(pessoasList.map((p) => [p.id, p.data_entrada ?? null]));
   const rows = (cobrancas ?? []) as Cobranca[];
   return rows.map((c) => {
     const pid = resolvePessoaIdCobranca(c);
     const membro_nome = c.membro || (pid ? nomes.get(pid) : undefined) || 'Membro não informado';
-    return { ...c, membro_nome };
+    return {
+      ...c,
+      membro_nome,
+      membro_contato: pid ? contatos.get(pid) ?? null : null,
+      membro_email: pid ? emails.get(pid) ?? null : null,
+      membro_data_entrada: pid ? entradas.get(pid) ?? null : null,
+    };
   });
+}
+
+/** Pendente e válida após data de entrada do membro. */
+export function isCobrancaContabilizavel(c: CobrancaComMembro): boolean {
+  if (!isCobrancaPendente(c) || valorSaldoCobranca(c) <= 0) return false;
+  return cobrancaAposEntrada(c.vencimento, c.membro_data_entrada);
+}
+
+export async function restoreCobranca(id: string | number): Promise<void> {
+  const { error } = await supabase.from('cobrancas').update({ deleted_at: null }).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 export function pessoaEstaDevendo(pessoaId: UUID, cobrancas: Cobranca[]): boolean {

@@ -7,26 +7,75 @@ import {
   filtroPeriodoVazio,
   insertCobranca,
   isCobrancaPendente,
+  isCobrancaContabilizavel,
+  cobrancaAposEntrada,
   isMensalidadeTipo,
   registrarPagamento,
   updateCobranca,
   valorSaldoCobranca,
+  valorTotalCobranca,
   type CobrancaComMembro,
   type FiltroPeriodoCobranca,
   type LinhaRelatorioValoresPagos,
 } from '../../../services/cobrancas';
 import { fetchPessoasOptions } from '../../../services/pessoasLookup';
+import { fetchConfigIle } from '../../../services/configIle';
+import { writeAuditLog, buildAuditDiff } from '../../../services/auditLog';
+import { buildMailtoLink, buildWaMeLink, openExternal } from '../../../utils/whatsappLink';
 import { formatDateBR } from '../../../utils/formatDate';
+import { parseValorInput } from '../../../utils/money';
 import { gerarPdfRelatorio, type LinhaRelatorio } from '../../../utils/pdfRelatorio';
 import { Toast } from '../Toast';
 import { CobrancaForm, type CobrancaFormValues } from './CobrancaForm';
 import { CobrancasTable } from './CobrancasTable';
 import { PaginationControls } from '../PaginationControls';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { resolvePessoaIdCobranca, type CobrancaTipo } from '../../../types/database';
 
-export function CobrancasScreen() {
+const COBRANCA_TIPO_OPTIONS: SearchableSelectOption[] = [
+  { value: 'obrigacao', label: 'Obrigação' },
+  { value: 'outros', label: 'Outros' },
+];
+
+const COBRANCA_TIPO_FILTRO_OPTIONS: SearchableSelectOption[] = [
+  { value: '', label: 'Todos' },
+  ...COBRANCA_TIPO_OPTIONS,
+];
+
+const FORMA_PAGAMENTO_OPTIONS: SearchableSelectOption[] = [
+  { value: 'PIX', label: 'PIX' },
+  { value: 'Dinheiro', label: 'Dinheiro' },
+  { value: 'Cartão', label: 'Cartão' },
+  { value: 'Transferência', label: 'Transferência' },
+];
+
+type Props = { canSend?: boolean };
+
+const COBRANCA_FIELD_LABELS: Record<string, string> = {
+  membro_nome: 'Membro',
+  valor: 'Valor',
+  data: 'Vencimento',
+  descricao: 'Descrição',
+  tipo: 'Tipo',
+};
+
+function startOfWeekIso(d = new Date()) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = x.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  x.setDate(x.getDate() + diff);
+  return x.toISOString().slice(0, 10);
+}
+
+function endOfWeekIso(d = new Date()) {
+  const start = new Date(startOfWeekIso(d));
+  start.setDate(start.getDate() + 6);
+  return start.toISOString().slice(0, 10);
+}
+
+export function CobrancasScreen({ canSend = true }: Props) {
   const [rows, setRows] = useState<CobrancaComMembro[]>([]);
   const [loading, setLoading] = useState(true);
   const [rascunhoPeriodo, setRascunhoPeriodo] = useState<FiltroPeriodoCobranca>(filtroPeriodoVazio);
@@ -36,6 +85,9 @@ export function CobrancasScreen() {
   const [editing, setEditing] = useState<CobrancaComMembro | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CobrancaComMembro | null>(null);
   const [buscaMembro, setBuscaMembro] = useState('');
+  const [venceEstaSemana, setVenceEstaSemana] = useState(false);
+  const [pixKey, setPixKey] = useState('');
+  const [ileNome, setIleNome] = useState('Ilê');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [page, setPage] = useState(1);
@@ -46,7 +98,7 @@ export function CobrancasScreen() {
     valor: string;
     descricao: string;
   }>({
-    tipo: 'mensalidade',
+    tipo: 'obrigacao',
     data: '',
     valor: '50.00',
     descricao: '',
@@ -76,7 +128,7 @@ export function CobrancasScreen() {
     setLoading(true);
     try {
       const data = await fetchCobrancasComMembros();
-      setRows(data);
+      setRows(data.filter((c) => !isMensalidadeTipo(c)));
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao carregar cobranças.', variant: 'error' });
     } finally {
@@ -86,15 +138,29 @@ export function CobrancasScreen() {
 
   useEffect(() => {
     void reload();
+    fetchConfigIle()
+      .then((c) => {
+        setPixKey(c.chave_pix ?? '');
+        setIleNome(c.nome_ile?.trim() || 'Ilê');
+      })
+      .catch(() => undefined);
   }, [reload]);
 
   const filtered = useMemo(() => {
     let list = rows;
     if (!mostrarPagas) {
-      list = list.filter((c) => isCobrancaPendente(c));
+      list = list.filter((c) => isCobrancaContabilizavel(c));
     }
     if (periodoAplicado?.de && periodoAplicado?.ate) {
       list = list.filter((c) => cobrancaPassaFiltroIntervalo(c, periodoAplicado));
+    }
+    if (venceEstaSemana) {
+      const de = startOfWeekIso();
+      const ate = endOfWeekIso();
+      list = list.filter((c) => {
+        const v = c.vencimento;
+        return v && v >= de && v <= ate && isCobrancaContabilizavel(c);
+      });
     }
     const q = buscaMembro.trim().toLowerCase();
     if (q) {
@@ -104,7 +170,7 @@ export function CobrancasScreen() {
       });
     }
     return list;
-  }, [rows, mostrarPagas, periodoAplicado, buscaMembro]);
+  }, [rows, mostrarPagas, periodoAplicado, buscaMembro, venceEstaSemana]);
 
   const totalCobrancas = filtered.length;
   const cobrancasPaginadas = useMemo(() => {
@@ -123,11 +189,11 @@ export function CobrancasScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, mostrarPagas]);
+  }, [buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, mostrarPagas, venceEstaSemana]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, pageSize, buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, mostrarPagas]);
+  }, [page, pageSize, buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, mostrarPagas, venceEstaSemana]);
 
   useEffect(() => {
     localStorage.setItem('cobrancas_mostrar_pagas', mostrarPagas ? 'true' : 'false');
@@ -166,7 +232,7 @@ export function CobrancasScreen() {
 
   /** Soma dos saldos em aberto respeitando a mesma lista filtrada da tabela (período + nome). */
   const subtotalAberto = useMemo(() => {
-    return filtered.filter((c) => isCobrancaPendente(c)).reduce((a, c) => a + valorSaldoCobranca(c), 0);
+    return filtered.filter((c) => isCobrancaContabilizavel(c)).reduce((a, c) => a + valorSaldoCobranca(c), 0);
   }, [filtered]);
 
   const formatBRL = (n: number) =>
@@ -174,7 +240,7 @@ export function CobrancasScreen() {
 
   const montarLinhasPdf = (lista: CobrancaComMembro[]): LinhaRelatorio[] => {
     return lista
-      .filter((c) => isCobrancaPendente(c))
+      .filter((c) => isCobrancaContabilizavel(c))
       .map((c) => ({
         nome: c.membro_nome,
         data: formatDateBR(c.vencimento ?? c.created_at?.slice(0, 10) ?? null),
@@ -222,36 +288,114 @@ export function CobrancasScreen() {
       setToast({ msg: 'Membro não encontrado.', variant: 'error' });
       return;
     }
+    const valorNum = parseValorInput(values.valor);
+    if (valorNum == null || valorNum < 0) {
+      setToast({ msg: 'Informe um valor válido.', variant: 'error' });
+      return;
+    }
+    if (!cobrancaAposEntrada(values.data, p?.data_entrada)) {
+      setToast({
+        msg: `Vencimento anterior à data de entrada do membro (${p?.data_entrada?.slice(0, 10) || '—'}).`,
+        variant: 'error',
+      });
+      return;
+    }
+    const after = {
+      membro_nome: nome,
+      valor: valorNum,
+      data: values.data,
+      descricao: values.descricao || null,
+      tipo: values.tipo,
+    };
     if (editing) {
+      const before = {
+        membro_nome: editing.membro_nome,
+        valor: valorTotalCobranca(editing),
+        data: editing.vencimento,
+        descricao: editing.descricao || null,
+        tipo: editing.tipo,
+      };
       await updateCobranca(editing.id, {
         pessoa_id: values.pessoa_id,
         membro_nome: nome,
-        valor: values.valor,
+        valor: valorNum,
         data: values.data,
         descricao: values.descricao || null,
         tipo: values.tipo,
       });
-      setToast({ msg: 'Cobrança atualizada.', variant: 'success' });
+      await writeAuditLog({
+        action: 'update',
+        entity: 'cobrancas',
+        entity_id: editing.id,
+        resumo: nome,
+        diff: buildAuditDiff('Obrigações', before, after, COBRANCA_FIELD_LABELS),
+      });
+      setToast({ msg: 'Obrigação atualizada.', variant: 'success' });
     } else {
       await insertCobranca({
         pessoa_id: values.pessoa_id,
         membro_nome: nome,
-        valor: values.valor,
+        valor: valorNum,
         data: values.data,
         descricao: values.descricao || null,
         tipo: values.tipo,
       });
-      setToast({ msg: 'Cobrança criada.', variant: 'success' });
+      await writeAuditLog({
+        action: 'create',
+        entity: 'cobrancas',
+        resumo: nome,
+        diff: buildAuditDiff('Obrigações', null, after, COBRANCA_FIELD_LABELS),
+      });
+      setToast({ msg: 'Obrigação criada.', variant: 'success' });
     }
     await reload();
+  };
+
+  const msgCobranca = (c: CobrancaComMembro) => {
+    const saldo = valorSaldoCobranca(c);
+    const venc = formatDateBR(c.vencimento);
+    const pixLine = pixKey ? `\nPix: ${pixKey}` : '';
+    return `Olá ${c.membro_nome}! Obrigação do ${ileNome}: ${c.descricao || c.tipo || 'pendência'} — saldo ${saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (venc. ${venc}).${pixLine}\nObrigado!`;
+  };
+
+  const enviarWhatsApp = (c: CobrancaComMembro) => {
+    const url = buildWaMeLink(c.membro_contato, msgCobranca(c));
+    if (!url) {
+      setToast({ msg: 'Membro sem telefone cadastrado.', variant: 'error' });
+      return;
+    }
+    openExternal(url);
+  };
+
+  const enviarEmail = (c: CobrancaComMembro) => {
+    const url = buildMailtoLink(c.membro_email, `Obrigação — ${ileNome}`, msgCobranca(c));
+    if (!url) {
+      setToast({ msg: 'Membro sem e-mail cadastrado.', variant: 'error' });
+      return;
+    }
+    openExternal(url);
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
+      const before = {
+        membro_nome: deleteTarget.membro_nome,
+        valor: valorTotalCobranca(deleteTarget),
+        data: deleteTarget.vencimento,
+        descricao: deleteTarget.descricao || null,
+        tipo: deleteTarget.tipo,
+      };
       await deleteCobranca(deleteTarget.id);
+      await writeAuditLog({
+        action: 'delete',
+        entity: 'cobrancas',
+        entity_id: deleteTarget.id,
+        resumo: deleteTarget.membro_nome,
+        diff: buildAuditDiff('Obrigações', before, null, COBRANCA_FIELD_LABELS),
+      });
       setDeleteTarget(null);
-      setToast({ msg: 'Cobrança excluída.', variant: 'success' });
+      setToast({ msg: 'Obrigação excluída.', variant: 'success' });
       await reload();
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao excluir.', variant: 'error' });
@@ -274,15 +418,15 @@ export function CobrancasScreen() {
     });
   };
 
-  const gerarRelatorioMensalidadesAberto = () => {
-    const linhas = montarLinhasPdf(filtered.filter((c) => isMensalidadeTipo(c)));
+  const gerarRelatorioObrigacoesAberto = () => {
+    const linhas = montarLinhasPdf(filtered);
     const total = linhas.reduce((a, b) => a + b.valor, 0);
     gerarPdfRelatorio({
       periodo: periodoAplicado,
       linhas,
       total,
-      tituloPrincipal: 'Mensalidades em aberto',
-      subtitulo: 'Apenas cobranças do tipo Mensalidade com saldo pendente (filtros atuais).',
+      tituloPrincipal: 'Obrigações em aberto',
+      subtitulo: 'Saldos pendentes de obrigações (filtros atuais).',
     });
   };
 
@@ -310,7 +454,16 @@ export function CobrancasScreen() {
         return;
       }
 
-      for (const p of pessoas) {
+      const elegiveis = pessoas.filter((p) => cobrancaAposEntrada(data, p.data_entrada));
+      if (!elegiveis.length) {
+        setToast({
+          msg: 'Nenhum membro com data de entrada até a data do vencimento.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      for (const p of elegiveis) {
         await insertCobranca({
           pessoa_id: p.id,
           membro_nome: p.nome,
@@ -321,7 +474,14 @@ export function CobrancasScreen() {
         });
       }
 
-      setToast({ msg: `Cobrança criada para ${pessoas.length} membro(s).`, variant: 'success' });
+      const pulados = pessoas.length - elegiveis.length;
+      setToast({
+        msg:
+          pulados > 0
+            ? `Obrigação criada para ${elegiveis.length} membro(s). ${pulados} ignorado(s) (antes da entrada).`
+            : `Obrigação criada para ${elegiveis.length} membro(s).`,
+        variant: 'success',
+      });
       setBulkOpen(false);
       await reload();
     } catch (e) {
@@ -446,6 +606,14 @@ export function CobrancasScreen() {
     return [...map.entries()].map(([id, nome]) => ({ id, nome }));
   }, [rows]);
 
+  const pessoasRelatorioOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: 'Todos' },
+      ...pessoasRelatorio.map((p) => ({ value: p.id, label: p.nome })),
+    ],
+    [pessoasRelatorio],
+  );
+
   const exportarRelatorioCsv = () => {
     const header = ['Data Pagamento', 'Membro', 'Descrição', 'Valor', 'Forma Pagamento'];
     const lines = reportRows.map((r) => [
@@ -483,7 +651,12 @@ export function CobrancasScreen() {
   return (
     <>
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-      <h1>Cobranças</h1>
+      <header className="dash-page-head">
+        <div className="dash-page-head__titles">
+          <h1>Obrigações</h1>
+          <p className="dash-muted">Obrigações e outras cobranças pontuais do terreiro.</p>
+        </div>
+      </header>
 
       <div className="dash-filter-bar dash-filter-bar--periodo" data-tour="cobrancas-filtros">
         <div className="dash-cob-layout-row">
@@ -534,8 +707,8 @@ export function CobrancasScreen() {
                 Relatório por nome
               </button>
             )}
-            <button type="button" className="dash-btn-secondary" onClick={gerarRelatorioMensalidadesAberto}>
-              Mensalidades em Aberto
+            <button type="button" className="dash-btn-secondary" onClick={gerarRelatorioObrigacoesAberto}>
+              Obrigações em aberto
             </button>
             <button type="button" className="dash-btn-secondary" onClick={() => setReportOpen(true)}>
               Valores Pagos
@@ -548,14 +721,18 @@ export function CobrancasScreen() {
             <input type="checkbox" checked={mostrarPagas} onChange={(e) => setMostrarPagas(e.target.checked)} />
             <span>Exibir valores pagos</span>
           </label>
+          <label className="dash-toggle-paid">
+            <input type="checkbox" checked={venceEstaSemana} onChange={(e) => setVenceEstaSemana(e.target.checked)} />
+            <span>Vence esta semana</span>
+          </label>
         </div>
       </div>
 
       <div className="dash-section-header">
         <p className="dash-muted">
           {periodoAplicado?.de && periodoAplicado?.ate
-            ? `A mostrar cobranças com vencimento entre ${periodoAplicado.de} e ${periodoAplicado.ate}.`
-            : 'Sem filtro de período — a mostrar todas as cobranças.'}{' '}
+            ? `A mostrar obrigações com vencimento entre ${periodoAplicado.de} e ${periodoAplicado.ate}.`
+            : 'Sem filtro de período — a mostrar todas as obrigações.'}{' '}
           {buscaMembro.trim()
             ? `Pesquisa ativa por nome (“${buscaMembro.trim()}”).`
             : null}{' '}
@@ -566,7 +743,7 @@ export function CobrancasScreen() {
             Cobrar todos os membros
           </button>
           <button type="button" className="dash-add-button" onClick={openNovo}>
-            Nova cobrança
+            Nova obrigação
           </button>
         </div>
       </div>
@@ -597,6 +774,9 @@ export function CobrancasScreen() {
               onEdit={openEdit}
               onDelete={setDeleteTarget}
               onRefresh={reload}
+              onWhatsApp={enviarWhatsApp}
+              onEmail={enviarEmail}
+              canSend={canSend}
             />
           </div>
           <p className="dash-cob-subtotal" role="status">
@@ -620,19 +800,17 @@ export function CobrancasScreen() {
       {bulkOpen && (
         <div className="dash-modal-overlay" role="dialog" aria-modal="true" onClick={() => setBulkOpen(false)}>
           <div className="dash-modal dash-modal--narrow" onClick={(e) => e.stopPropagation()}>
-            <h2>Cobrança em massa</h2>
+            <h2>Obrigação em massa</h2>
             <p className="dash-muted">Cria uma cobrança para cada membro da casa.</p>
             <div className="dash-member-form">
               <label className="dash-field">
                 <span>Tipo</span>
-                <select
+                <SearchableSelect
+                  options={COBRANCA_TIPO_OPTIONS}
                   value={bulkValues.tipo}
-                  onChange={(e) => setBulkValues((v) => ({ ...v, tipo: e.target.value as CobrancaFormValues['tipo'] }))}
-                >
-                  <option value="mensalidade">Mensalidade</option>
-                  <option value="obrigacao">Obrigação</option>
-                  <option value="outros">Outros</option>
-                </select>
+                  onChange={(v) => setBulkValues((prev) => ({ ...prev, tipo: v as CobrancaFormValues['tipo'] }))}
+                  aria-label="Tipo"
+                />
               </label>
               <label className="dash-field">
                 <span>Data vencimento</span>
@@ -694,12 +872,12 @@ export function CobrancasScreen() {
               </label>
               <label className="dash-field">
                 <span>Forma de pagamento</span>
-                <select value={bulkPagamentoForma} onChange={(e) => setBulkPagamentoForma(e.target.value)}>
-                  <option value="PIX">PIX</option>
-                  <option value="Dinheiro">Dinheiro</option>
-                  <option value="Cartão">Cartão</option>
-                  <option value="Transferência">Transferência</option>
-                </select>
+                <SearchableSelect
+                  options={FORMA_PAGAMENTO_OPTIONS}
+                  value={bulkPagamentoForma}
+                  onChange={setBulkPagamentoForma}
+                  aria-label="Forma de pagamento"
+                />
               </label>
             </div>
             <div className="dash-form-actions">
@@ -756,23 +934,22 @@ export function CobrancasScreen() {
                 </label>
                 <label className="dash-field">
                   <span>Tipo</span>
-                  <select value={reportFiltro.tipo} onChange={(e) => setReportFiltro((r) => ({ ...r, tipo: e.target.value as CobrancaTipo | '' }))}>
-                    <option value="">Todos</option>
-                    <option value="mensalidade">Mensalidade</option>
-                    <option value="obrigacao">Obrigação</option>
-                    <option value="outros">Outros</option>
-                  </select>
+                  <SearchableSelect
+                    options={COBRANCA_TIPO_FILTRO_OPTIONS}
+                    value={reportFiltro.tipo}
+                    onChange={(v) => setReportFiltro((r) => ({ ...r, tipo: v as CobrancaTipo | '' }))}
+                    aria-label="Tipo"
+                  />
                 </label>
                 <label className="dash-field">
                   <span>Membro</span>
-                  <select value={reportFiltro.pessoaId} onChange={(e) => setReportFiltro((r) => ({ ...r, pessoaId: e.target.value }))}>
-                    <option value="">Todos</option>
-                    {pessoasRelatorio.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nome}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={pessoasRelatorioOptions}
+                    value={reportFiltro.pessoaId}
+                    onChange={(v) => setReportFiltro((r) => ({ ...r, pessoaId: v }))}
+                    searchPlaceholder="Buscar membro…"
+                    aria-label="Membro"
+                  />
                 </label>
                 <div className="dash-field dash-relatorio-filtros__action">
                   <span className="dash-relatorio-filtros__action-label" aria-hidden="true">

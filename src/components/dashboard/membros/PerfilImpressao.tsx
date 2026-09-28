@@ -7,6 +7,7 @@ import { formatDateBR } from '../../../utils/formatDate';
 type Props = {
   nome: string;
   dataNascimento: string;
+  dataEntrada?: string;
   contatoFormatado: string;
   email: string;
   signo: string;
@@ -35,6 +36,7 @@ const formatMoney = (value: number): string =>
 export function PerfilImpressao({
   nome,
   dataNascimento,
+  dataEntrada,
   contatoFormatado,
   email,
   signo,
@@ -89,6 +91,9 @@ export function PerfilImpressao({
           <div className="perfil-cabecalho__dados">
             <p>
               <strong>Data de nascimento:</strong> {formatDateBR(dataNascimento)}
+            </p>
+            <p>
+              <strong>Data de entrada (iniciação):</strong> {formatDateBR(dataEntrada)}
             </p>
             <p>
               <strong>Signo:</strong> {signo || '—'}

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { SearchableSelect, type SearchableSelectOption } from './SearchableSelect';
 
 type Props = {
   totalItems: number;
@@ -9,6 +10,11 @@ type Props = {
 };
 
 const PAGE_SIZES = [10, 20, 30, 50, 100];
+
+const PAGE_SIZE_OPTIONS: SearchableSelectOption[] = PAGE_SIZES.map((s) => ({
+  value: String(s),
+  label: String(s),
+}));
 
 export function PaginationControls({ totalItems, currentPage, pageSize, onPageChange, onPageSizeChange }: Props) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -39,19 +45,15 @@ export function PaginationControls({ totalItems, currentPage, pageSize, onPageCh
       <div className="dash-pagination__controls">
         <label className="dash-pagination__page-size">
           <span>Por página</span>
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              onPageSizeChange(Number(e.target.value));
+          <SearchableSelect
+            options={PAGE_SIZE_OPTIONS}
+            value={String(pageSize)}
+            onChange={(v) => {
+              onPageSizeChange(Number(v));
               onPageChange(1);
             }}
-          >
-            {PAGE_SIZES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+            aria-label="Itens por página"
+          />
         </label>
 
         <button type="button" className="dash-btn-secondary" onClick={() => onPageChange(safePage - 1)} disabled={safePage <= 1}>

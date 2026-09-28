@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchPessoasLista, deletePessoa, fetchReferenciasPerfilMembro } from '../../../services/membros';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchPessoasLista, deletePessoa, restorePessoa, fetchReferenciasPerfilMembro } from '../../../services/membros';
 import {
   deleteCobranca,
   fetchCobrancasComMembros,
@@ -27,6 +27,8 @@ import { gerarPdfPerfil } from '../../../services/gerarPdfPerfil';
 import { carregarLogoBase64 } from '../../../utils/logoBase64';
 import { formatDateBR } from '../../../utils/formatDate';
 import { PaginationControls } from '../PaginationControls';
+import { downloadMembrosTemplate, importMembrosFromExcel } from '../../../services/membrosExcel';
+import { writeAuditLog } from '../../../services/auditLog';
 
 const BUSCA_MEMBROS_PLACEHOLDER = 'Pesquisar por nome, orisá de cabeça ou telefone';
 
@@ -38,7 +40,9 @@ function defaultDirFor(key: SortKey): 'asc' | 'desc' {
   return 'asc';
 }
 
-export function MembrosScreen() {
+type Props = { canExcel?: boolean; canRestore?: boolean };
+
+export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
   const [view, setView] = useState<View>('list');
   const [editId, setEditId] = useState<UUID | null>(null);
   const [lista, setLista] = useState<PessoaListaItem[]>([]);
@@ -49,6 +53,10 @@ export function MembrosScreen() {
   const [loadingLista, setLoadingLista] = useState(true);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<UUID | null>(null);
+  const [verExcluidos, setVerExcluidos] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [excelMenuAberto, setExcelMenuAberto] = useState(false);
+  const excelMenuRef = useRef<HTMLDivElement | null>(null);
   const [busca, setBusca] = useState('');
   const [qualidadeNomeById, setQualidadeNomeById] = useState<Record<string, string>>({});
   const [sobrenomeNomeById, setSobrenomeNomeById] = useState<Record<string, string>>({});
@@ -58,10 +66,16 @@ export function MembrosScreen() {
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem('membros_page_size') || '20'));
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' });
 
+  useEffect(() => {
+    if (view !== 'form') return;
+    document.body.setAttribute('data-ficha-membro', '1');
+    return () => document.body.removeAttribute('data-ficha-membro');
+  }, [view]);
+
   const reloadAll = useCallback(async () => {
     setLoadingLista(true);
     try {
-      const [p, c] = await Promise.all([fetchPessoasLista(), fetchCobrancasComMembros()]);
+      const [p, c] = await Promise.all([fetchPessoasLista(verExcluidos), fetchCobrancasComMembros()]);
       setLista(p);
       setCobrancas(c);
     } catch (e) {
@@ -69,7 +83,7 @@ export function MembrosScreen() {
     } finally {
       setLoadingLista(false);
     }
-  }, []);
+  }, [verExcluidos]);
 
   const salvarCobrancaPerfil = async (values: CobrancaFormValues) => {
     if (!cobrancaEditing) return;
@@ -210,24 +224,93 @@ export function MembrosScreen() {
 
   const handleDelete = async (id: UUID) => {
     try {
+      const nome = lista.find((m) => String(m.id) === String(id))?.nome;
       await deletePessoa(id);
+      await writeAuditLog({
+        action: 'delete',
+        entity: 'pessoas',
+        entity_id: id,
+        resumo: nome,
+        diff: {
+          tela: 'Membros',
+          changes: [{ campo: 'Situação', antigo: 'Ativo', novo: 'Inativado' }],
+        },
+      });
       if (String(editId) === String(id)) {
         backToList();
       } else {
         setDeleteConfirm(null);
       }
       await reloadAll();
-      setToast({ msg: 'Membro excluído.', variant: 'success' });
+      setToast({ msg: 'Membro inativado.', variant: 'success' });
     } catch (e) {
-      setToast({ msg: e instanceof Error ? e.message : 'Não foi possível excluir.', variant: 'error' });
+      setToast({ msg: e instanceof Error ? e.message : 'Não foi possível inativar.', variant: 'error' });
     }
   };
 
+  const handleRestore = async (id: UUID) => {
+    try {
+      const nome = lista.find((m) => String(m.id) === String(id))?.nome;
+      await restorePessoa(id);
+      await writeAuditLog({
+        action: 'restore',
+        entity: 'pessoas',
+        entity_id: id,
+        resumo: nome,
+        diff: {
+          tela: 'Membros',
+          changes: [{ campo: 'Situação', antigo: 'Inativado', novo: 'Ativo' }],
+        },
+      });
+      await reloadAll();
+      setToast({ msg: 'Membro restaurado.', variant: 'success' });
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Não foi possível restaurar.', variant: 'error' });
+    }
+  };
+
+  const onImportExcel = async (file: File | null) => {
+    if (!file) return;
+    setImporting(true);
+    setExcelMenuAberto(false);
+    try {
+      const res = await importMembrosFromExcel(file);
+      await reloadAll();
+      setToast({
+        msg: `Importação: ${res.ok} ok, ${res.skipped} saltados.${res.errors.length ? ` Erros: ${res.errors.slice(0, 3).join('; ')}` : ''}`,
+        variant: res.errors.length && !res.ok ? 'error' : 'success',
+      });
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Falha na importação.', variant: 'error' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!excelMenuAberto) return;
+    const onDoc = (e: MouseEvent) => {
+      if (excelMenuRef.current && !excelMenuRef.current.contains(e.target as Node)) {
+        setExcelMenuAberto(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExcelMenuAberto(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [excelMenuAberto]);
+
   const handlePessoaisChange = (
-    field: 'nome' | 'dataNascimento' | 'contato' | 'email' | 'signo' | 'obs',
+    field: 'nome' | 'dataEntrada' | 'dataNascimento' | 'contato' | 'email' | 'signo' | 'obs',
     value: string,
   ) => {
     if (field === 'nome') form.setNome(value);
+    if (field === 'dataEntrada') form.setDataEntrada(value);
     if (field === 'dataNascimento') form.setDataNascimento(value);
     if (field === 'contato') form.setContato(somenteDigitosTelefone(value));
     if (field === 'email') form.setEmail(value);
@@ -347,6 +430,7 @@ export function MembrosScreen() {
         gerarPdfPerfil({
           nome: form.nome || '—',
           nascimento: formatDateBR(form.dataNascimento),
+          entrada: formatDateBR(form.dataEntrada),
           signo: form.signo || '—',
           telefone: formatarTelefoneMascara(form.contato),
           email: form.email || '—',
@@ -402,7 +486,7 @@ export function MembrosScreen() {
     return (
       <>
         <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-        <div className="dash-split-main">
+        <div className="dash-split-main" data-ficha-membro="1">
           <div className="dash-split-main__bar">
             <button type="button" className="dash-btn-secondary" onClick={backToList}>
               ← Voltar à lista
@@ -419,7 +503,7 @@ export function MembrosScreen() {
                   {pdfLoading ? 'Gerando PDF…' : '🖨 Salvar PDF'}
                 </button>
                 <button type="button" className="dash-btn-danger-outline" onClick={() => setDeleteConfirm(editId)}>
-                  Excluir membro
+                  Inativar membro
                 </button>
               </div>
             )}
@@ -430,7 +514,8 @@ export function MembrosScreen() {
             <p>Carregando formulário…</p>
           ) : (
             <form
-              className="dash-member-form"
+              id="dash-membro-form"
+              className="dash-member-form dash-member-form--with-fab"
               onSubmit={(e) => {
                 e.preventDefault();
                 void form.submit();
@@ -438,6 +523,7 @@ export function MembrosScreen() {
             >
               <PessoaisSection
                 nome={form.nome}
+                dataEntrada={form.dataEntrada}
                 dataNascimento={form.dataNascimento}
                 contato={form.contato}
                 email={form.email}
@@ -458,12 +544,14 @@ export function MembrosScreen() {
                 addRow={form.addExu}
                 removeRow={form.removeExu}
                 updateRow={form.updateExu}
+                reorderRows={form.reorderExus}
               />
               <UmbandaSection
                 rows={form.umbanda}
                 addRow={form.addUmbanda}
                 removeRow={form.removeUmbanda}
                 updateRow={form.updateUmbanda}
+                reorderRows={form.reorderUmbanda}
               />
               {editId && (
                 <CobrancasReadOnlySummary
@@ -475,20 +563,21 @@ export function MembrosScreen() {
                   onDelete={setCobrancaDelete}
                 />
               )}
-              <div className="dash-form-actions">
-                <button type="button" className="dash-btn-secondary" onClick={backToList}>
-                  Cancelar
-                </button>
-                <button type="submit" className="dash-btn-primary" disabled={form.saving}>
-                  {form.saving ? 'Salvando…' : 'Salvar membro'}
-                </button>
-              </div>
             </form>
           )}
+        </div>
+        <div className="dash-membro-fab no-print">
+          <button type="button" className="dash-btn-secondary" onClick={backToList}>
+            Voltar
+          </button>
+          <button type="submit" form="dash-membro-form" className="dash-btn-primary" disabled={form.saving || form.loadingMeta || form.loadingPessoa}>
+            {form.saving ? 'Salvando…' : 'Salvar'}
+          </button>
         </div>
         <PerfilImpressao
           nome={form.nome}
           dataNascimento={form.dataNascimento}
+          dataEntrada={form.dataEntrada}
           contatoFormatado={formatarTelefoneMascara(form.contato)}
           email={form.email}
           signo={form.signo}
@@ -533,14 +622,14 @@ export function MembrosScreen() {
         {deleteConfirm && (
           <div className="dash-modal-overlay" role="dialog" aria-modal="true">
             <div className="dash-modal dash-modal--narrow">
-              <h2>Excluir membro?</h2>
-              <p>Esta ação não pode ser desfeita.</p>
+              <h2>Inativar membro?</h2>
+              <p>O membro sai da lista ativa e pode ser restaurado em “Ver inativados”.</p>
               <div className="dash-form-actions">
                 <button type="button" className="dash-btn-secondary" onClick={() => setDeleteConfirm(null)}>
                   Cancelar
                 </button>
                 <button type="button" className="dash-btn-danger" onClick={() => void handleDelete(deleteConfirm)}>
-                  Excluir
+                  Inativar
                 </button>
               </div>
             </div>
@@ -553,9 +642,14 @@ export function MembrosScreen() {
   return (
     <>
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-      <h1>Membros</h1>
-      <div className="dash-section-header" data-tour="membros-filtros">
-        <div className="dash-filtros">
+      <header className="dash-page-head">
+        <div className="dash-page-head__titles">
+          <h1>Membros</h1>
+          <p className="dash-muted">Cadastro e ficha dos membros do Ilê.</p>
+        </div>
+      </header>
+      <div className="dash-section-header dash-toolbar" data-tour="membros-filtros">
+        <div className="dash-filtros dash-filtros--busca">
           <input
             placeholder={BUSCA_MEMBROS_PLACEHOLDER}
             value={busca}
@@ -563,9 +657,60 @@ export function MembrosScreen() {
             aria-label={BUSCA_MEMBROS_PLACEHOLDER}
           />
         </div>
-        <button type="button" className="dash-add-button" data-tour="membros-adicionar" onClick={openCreate}>
-          Adicionar membro
-        </button>
+        {canRestore && (
+          <label className="dash-toggle-paid dash-toggle-paid--compact">
+            <input type="checkbox" checked={verExcluidos} onChange={(e) => setVerExcluidos(e.target.checked)} />
+            <span>Ver inativados</span>
+          </label>
+        )}
+        <div className="dash-section-actions">
+          {canExcel && (
+            <div className="dash-excel-menu" ref={excelMenuRef}>
+              <button
+                type="button"
+                className="dash-add-button dash-add-button--secondary"
+                data-tour="membros-excel-menu"
+                aria-expanded={excelMenuAberto}
+                aria-haspopup="menu"
+                disabled={importing}
+                onClick={() => setExcelMenuAberto((v) => !v)}
+              >
+                {importing ? 'A importar…' : 'Excel ▾'}
+              </button>
+              {excelMenuAberto && (
+                <div className="dash-excel-menu__panel" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-tour="membros-excel-modelo"
+                    onClick={() => {
+                      downloadMembrosTemplate();
+                      setExcelMenuAberto(false);
+                    }}
+                  >
+                    Baixar modelo
+                  </button>
+                  <label className="dash-excel-menu__import" role="menuitem" data-tour="membros-excel-import">
+                    Importar Excel
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      hidden
+                      disabled={importing}
+                      onChange={(e) => {
+                        void onImportExcel(e.target.files?.[0] ?? null);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+          <button type="button" className="dash-add-button" data-tour="membros-adicionar" onClick={openCreate}>
+            Adicionar membro
+          </button>
+        </div>
       </div>
 
       <div className="dash-filtros-mobile" data-tour="membros-filtros-mobile">
@@ -622,28 +767,49 @@ export function MembrosScreen() {
               <tbody>
                 {membrosPaginados.map((m) => {
                   const devendo = pessoaEstaDevendo(m.id, cobrancas);
+                  const excluido = Boolean(m.deleted_at);
                   return (
                     <tr
                       key={m.id}
                       className="dash-row-clickable"
                       role="button"
                       tabIndex={0}
-                      onClick={() => openEdit(m.id)}
+                      onClick={() => {
+                        if (excluido) return;
+                        openEdit(m.id);
+                      }}
                       onKeyDown={(e) => {
+                        if (excluido) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           openEdit(m.id);
                         }
                       }}
-                      aria-label={`Abrir perfil de ${m.nome}`}
+                      aria-label={excluido ? `${m.nome} (excluído)` : `Abrir perfil de ${m.nome}`}
                     >
-                      <td>{m.nome}</td>
+                      <td>
+                        {m.nome}
+                        {excluido && <em className="dash-muted"> · excluído</em>}
+                      </td>
                       <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
                       <td>{m.orixa_cabeca_nome || '—'}</td>
                       <td>
-                        <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
-                          {devendo ? 'Devendo' : 'Em dia'}
-                        </span>
+                        {excluido && canRestore ? (
+                          <button
+                            type="button"
+                            className="dash-btn-secondary dash-btn-min"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleRestore(m.id);
+                            }}
+                          >
+                            Restaurar
+                          </button>
+                        ) : (
+                          <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
+                            {devendo ? 'Devendo' : 'Em dia'}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   );

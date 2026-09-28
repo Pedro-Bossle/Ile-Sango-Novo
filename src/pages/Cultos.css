@@ -84,6 +84,14 @@
   max-width: 52ch;
 }
 
+.cultos-section__subtitle {
+  margin: 1.25rem 0 0.75rem;
+  font-family: var(--fonte-secundaria);
+  color: var(--bordo);
+  font-size: clamp(1.05rem, 1.4vw, 1.15rem);
+  font-weight: 600;
+}
+
 .cultos-section__text p {
   margin: 0 0 1rem;
   line-height: 1.72;

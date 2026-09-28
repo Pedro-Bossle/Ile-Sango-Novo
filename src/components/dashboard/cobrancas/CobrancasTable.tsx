@@ -11,6 +11,9 @@ type Props = {
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
+  onWhatsApp?: (c: CobrancaComMembro) => void;
+  onEmail?: (c: CobrancaComMembro) => void;
+  canSend?: boolean;
 };
 
 type SortKey = 'criacao' | 'vencimento' | 'membro' | 'tipo' | 'valores' | 'descricao';
@@ -117,6 +120,9 @@ export function CobrancasTable({
   onEdit,
   onDelete,
   onRefresh,
+  onWhatsApp,
+  onEmail,
+  canSend = false,
 }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'vencimento',
@@ -226,6 +232,9 @@ export function CobrancasTable({
               onEdit={onEdit}
               onDelete={onDelete}
               onRefresh={onRefresh}
+              onWhatsApp={onWhatsApp}
+              onEmail={onEmail}
+              canSend={canSend}
             />
           ))}
         </tbody>

@@ -20,6 +20,9 @@ type Props = {
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
+  onWhatsApp?: (c: CobrancaComMembro) => void;
+  onEmail?: (c: CobrancaComMembro) => void;
+  canSend?: boolean;
 };
 
 function badgeTipo(t: string | null | undefined): { label: string; className: string } {
@@ -29,7 +32,17 @@ function badgeTipo(t: string | null | undefined): { label: string; className: st
   return { label: t?.trim() ? String(t) : '—', className: 'dash-badge-tipo' };
 }
 
-export function CobrancaRow({ cobranca, selected, onSelect, onEdit, onDelete, onRefresh }: Props) {
+export function CobrancaRow({
+  cobranca,
+  selected,
+  onSelect,
+  onEdit,
+  onDelete,
+  onRefresh,
+  onWhatsApp,
+  onEmail,
+  canSend = false,
+}: Props) {
   const [registrarOpen, setRegistrarOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
 
@@ -123,6 +136,28 @@ export function CobrancaRow({ cobranca, selected, onSelect, onEdit, onDelete, on
               aria-label="Pagar"
             >
               💵
+            </button>
+          )}
+          {pendente && canSend && onWhatsApp && (
+            <button
+              type="button"
+              className="dash-btn-table"
+              onClick={() => onWhatsApp(cobranca)}
+              title="WhatsApp"
+              aria-label="WhatsApp cobrança"
+            >
+              WA
+            </button>
+          )}
+          {pendente && canSend && onEmail && (
+            <button
+              type="button"
+              className="dash-btn-table"
+              onClick={() => onEmail(cobranca)}
+              title="E-mail"
+              aria-label="E-mail cobrança"
+            >
+              ✉
             </button>
           )}
           {pendente && (
