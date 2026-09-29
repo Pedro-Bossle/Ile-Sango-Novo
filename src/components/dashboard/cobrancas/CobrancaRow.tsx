@@ -17,6 +17,10 @@ type Props = {
   onRefresh: () => void;
   /** Quando dentro de um grupo por membro, oculta o nome repetido. */
   hideNome?: boolean;
+  /** Exibe checkbox (ex.: várias cobranças do mesmo membro). */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (c: CobrancaComMembro, next: boolean) => void;
 };
 
 function money(n: number) {
@@ -42,7 +46,16 @@ function statusBadge(c: CobrancaComMembro): { key: 'atrasada' | 'aberta' | 'pago
   return { key: 'aberta', label: 'Em aberto' };
 }
 
-export function CobrancaRow({ cobranca, onEdit, onDelete, onRefresh, hideNome = false }: Props) {
+export function CobrancaRow({
+  cobranca,
+  onEdit,
+  onDelete,
+  onRefresh,
+  hideNome = false,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+}: Props) {
   const [registrarOpen, setRegistrarOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
 
@@ -60,8 +73,18 @@ export function CobrancaRow({ cobranca, onEdit, onDelete, onRefresh, hideNome = 
       <article
         className={`dash-cob-item${status.key === 'pago' ? ' dash-cob-item--pago' : ''}${
           hideNome ? ' dash-cob-item--nested' : ''
-        }`}
+        }${selected ? ' is-selected' : ''}`}
       >
+        {selectable && (
+          <label className="dash-cob-item__check">
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={(e) => onToggleSelect?.(cobranca, e.target.checked)}
+              aria-label={`Selecionar cobrança de ${nome}`}
+            />
+          </label>
+        )}
         <div className="dash-cob-item__main">
           {!hideNome && <h3 className="dash-cob-item__nome">{nome}</h3>}
           <p className={`dash-cob-item__desc${hideNome ? ' dash-cob-item__desc--lead' : ''}`}>{desc}</p>

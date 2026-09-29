@@ -62,9 +62,20 @@ type Props = {
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (c: CobrancaComMembro, next: boolean) => void;
+  onToggleSelectGroup?: (items: CobrancaComMembro[], next: boolean) => void;
 };
 
-export function CobrancaMembroCard({ grupo, onEdit, onDelete, onRefresh }: Props) {
+export function CobrancaMembroCard({
+  grupo,
+  onEdit,
+  onDelete,
+  onRefresh,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectGroup,
+}: Props) {
   const multi = grupo.items.length > 1;
   const [open, setOpen] = useState(false);
 
@@ -84,6 +95,14 @@ export function CobrancaMembroCard({ grupo, onEdit, onDelete, onRefresh }: Props
   const status = statusGrupo(grupo.items);
   const qtdPendentes = grupo.items.filter((c) => isCobrancaPendente(c)).length;
 
+  const selectedCount = useMemo(() => {
+    if (!selectedIds) return 0;
+    return grupo.items.filter((c) => selectedIds.has(String(c.id))).length;
+  }, [grupo.items, selectedIds]);
+
+  const allSelected = multi && selectedCount === grupo.items.length && grupo.items.length > 0;
+  const someSelected = multi && selectedCount > 0 && !allSelected;
+
   if (!multi) {
     return (
       <CobrancaRow
@@ -99,40 +118,64 @@ export function CobrancaMembroCard({ grupo, onEdit, onDelete, onRefresh }: Props
     <article
       className={`dash-cob-group${status.key === 'pago' ? ' dash-cob-group--pago' : ''}${
         open ? ' is-open' : ''
-      }`}
+      }${selectedCount > 0 ? ' is-selected' : ''}`}
     >
-      <button
-        type="button"
-        className="dash-cob-group__toggle"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className="dash-cob-group__chevron" aria-hidden>
-          {open ? '▾' : '▸'}
-        </span>
-        <span className="dash-cob-group__main">
-          <strong className="dash-cob-group__nome">{grupo.nome}</strong>
-          <span className="dash-cob-group__meta">
-            {grupo.items.length} cobranças
-            {qtdPendentes > 0 ? ` · ${qtdPendentes} em aberto` : ''}
-          </span>
-          <span className="dash-cob-group__valores">
-            {money(totals.pago)} de {money(totals.total)} — resta {money(totals.saldo)}
-          </span>
-          <span
-            className="dash-cob-item__bar"
-            role="progressbar"
-            aria-valuenow={totals.pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${totals.pct}% quitado`}
+      <div className="dash-cob-group__head">
+        {onToggleSelectGroup && (
+          <label
+            className="dash-cob-group__check"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
-            <span className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, totals.pct)}%` }} />
+            <input
+              type="checkbox"
+              checked={allSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected;
+              }}
+              onChange={(e) => {
+                const next = e.target.checked;
+                if (next) setOpen(true);
+                onToggleSelectGroup(grupo.items, next);
+              }}
+              aria-label={`Selecionar todas as cobranças de ${grupo.nome}`}
+            />
+          </label>
+        )}
+        <button
+          type="button"
+          className="dash-cob-group__toggle"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="dash-cob-group__chevron" aria-hidden>
+            {open ? '▾' : '▸'}
           </span>
-          <span className="dash-cob-item__pct">{totals.pct}% quitado</span>
-        </span>
-        <span className={`dash-cob-status dash-cob-status--${status.key}`}>{status.label}</span>
-      </button>
+          <span className="dash-cob-group__main">
+            <strong className="dash-cob-group__nome">{grupo.nome}</strong>
+            <span className="dash-cob-group__meta">
+              {grupo.items.length} cobranças
+              {qtdPendentes > 0 ? ` · ${qtdPendentes} em aberto` : ''}
+              {selectedCount > 0 ? ` · ${selectedCount} selecionada(s)` : ''}
+            </span>
+            <span className="dash-cob-group__valores">
+              {money(totals.pago)} de {money(totals.total)} — resta {money(totals.saldo)}
+            </span>
+            <span
+              className="dash-cob-item__bar"
+              role="progressbar"
+              aria-valuenow={totals.pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${totals.pct}% quitado`}
+            >
+              <span className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, totals.pct)}%` }} />
+            </span>
+            <span className="dash-cob-item__pct">{totals.pct}% quitado</span>
+          </span>
+          <span className={`dash-cob-status dash-cob-status--${status.key}`}>{status.label}</span>
+        </button>
+      </div>
 
       {open && (
         <div className="dash-cob-group__items">
@@ -141,6 +184,9 @@ export function CobrancaMembroCard({ grupo, onEdit, onDelete, onRefresh }: Props
               key={String(c.id)}
               cobranca={c}
               hideNome
+              selectable
+              selected={Boolean(selectedIds?.has(String(c.id)))}
+              onToggleSelect={onToggleSelect}
               onEdit={onEdit}
               onDelete={onDelete}
               onRefresh={onRefresh}

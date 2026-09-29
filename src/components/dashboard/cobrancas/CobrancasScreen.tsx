@@ -557,6 +557,28 @@ export function CobrancasScreen({ canSend = true }: Props) {
 
   const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(String(r.id))), [rows, selectedIds]);
 
+  const toggleSelectCobranca = useCallback((c: CobrancaComMembro, next: boolean) => {
+    const id = String(c.id);
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (next) n.add(id);
+      else n.delete(id);
+      return n;
+    });
+  }, []);
+
+  const toggleSelectGrupo = useCallback((items: CobrancaComMembro[], next: boolean) => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      for (const c of items) {
+        const id = String(c.id);
+        if (next) n.add(id);
+        else n.delete(id);
+      }
+      return n;
+    });
+  }, []);
+
   const executarExcluirEmLote = async () => {
     if (!selectedRows.length) return;
     setBulkActionLoading(true);
@@ -804,6 +826,34 @@ export function CobrancasScreen({ canSend = true }: Props) {
         </article>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="dash-cob__selection-bar" role="region" aria-label="Ações em massa">
+          <span className="dash-cob__selection-count">
+            {selectedIds.size} selecionada{selectedIds.size === 1 ? '' : 's'}
+          </span>
+          <div className="dash-cob__selection-actions">
+            <button type="button" className="dash-btn-secondary" onClick={() => setSelectedIds(new Set())}>
+              Limpar
+            </button>
+            <button
+              type="button"
+              className="dash-btn-secondary"
+              onClick={() => {
+                setBulkPagamentoData(new Date().toISOString().slice(0, 10));
+                setBulkPagamentoForma(FORMA_PAGAMENTO_PADRAO);
+                setBulkActionOpen('pagar');
+              }}
+              disabled={!selectedRows.some((r) => isCobrancaPendente(r))}
+            >
+              Pagar selecionadas
+            </button>
+            <button type="button" className="dash-btn-danger" onClick={() => setBulkActionOpen('excluir')}>
+              Excluir selecionadas
+            </button>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p>Carregando…</p>
       ) : (
@@ -813,6 +863,9 @@ export function CobrancasScreen({ canSend = true }: Props) {
             onEdit={openEdit}
             onDelete={setDeleteTarget}
             onRefresh={() => void reload({ silent: true })}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelectCobranca}
+            onToggleSelectGroup={toggleSelectGrupo}
           />
           <PaginationControls
             totalItems={totalGrupos}

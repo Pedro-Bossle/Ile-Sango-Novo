@@ -217,7 +217,7 @@ const Dashboard = () => {
 
   const carregarDados = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
-    setError('');
+    if (!silent) setError('');
 
     const { data: sessao } = await supabase.auth.getSession();
     if (!sessao?.session) {
@@ -229,18 +229,23 @@ const Dashboard = () => {
     setUserId(uid);
 
     // Fluxo: Login → troca de senha (antes de carregar a dashboard) → dashboard + tutorial
-    try {
-      if (uid && (await isPasswordChangeRequired(uid))) {
-        navigate('/trocar-senha', { replace: true });
-        return;
+    // Em refresh silencioso (LIVE) não revalida senha nem apaga eventos — só lê.
+    if (!silent) {
+      try {
+        if (uid && (await isPasswordChangeRequired(uid))) {
+          navigate('/trocar-senha', { replace: true });
+          return;
+        }
+      } catch {
+        /* se a verificação falhar, não bloqueia o acesso */
       }
-    } catch {
-      /* se a verificação falhar, não bloqueia o acesso */
     }
 
     const hojeIso = new Date().toISOString().slice(0, 10);
     // Exclui automaticamente eventos passados (dia seguinte ao evento em diante).
-    await supabase.from('eventos').delete().lt('data', hojeIso).is('deleted_at', null);
+    if (!silent) {
+      await supabase.from('eventos').delete().lt('data', hojeIso).is('deleted_at', null);
+    }
 
     const ha30 = new Date();
     ha30.setDate(ha30.getDate() - 30);
@@ -441,7 +446,9 @@ const Dashboard = () => {
     setLoading(false);
 
     // Vincula mensalidade do mês a cada integrante ativo (idempotente; não bloqueia a UI).
-    void garantirMensalidadesMesCorrente().catch(() => undefined);
+    if (!silent) {
+      void garantirMensalidadesMesCorrente().catch(() => undefined);
+    }
   }, [navigate]);
 
   useEffect(() => {
@@ -568,6 +575,42 @@ const Dashboard = () => {
   useEffect(() => {
     if (profile) void refreshInbox();
   }, [profile, refreshInbox]);
+
+  // Visão geral LIVE: atualiza cards sem flash ao entrar, a cada 20s e ao voltar à aba.
+  const carregarDadosRef = useRef(carregarDados);
+  const refreshInboxRef = useRef(refreshInbox);
+  carregarDadosRef.current = carregarDados;
+  refreshInboxRef.current = refreshInbox;
+
+  useEffect(() => {
+    if (menuAtivo !== 'visao-geral') return undefined;
+
+    let cancelled = false;
+    let inFlight = false;
+
+    const tick = () => {
+      if (cancelled || document.hidden || inFlight) return;
+      inFlight = true;
+      Promise.all([carregarDadosRef.current({ silent: true }), refreshInboxRef.current()]).finally(() => {
+        inFlight = false;
+      });
+    };
+
+    tick();
+    const id = window.setInterval(tick, 20_000);
+    const onVis = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+    };
+  }, [menuAtivo]);
 
   const grupoDoMenu = (id) => {
     if (id === 'cobrancas' || id === 'mensalidades' || id === 'caixa' || id === 'atrasados') return 'fin';
@@ -1033,7 +1076,13 @@ const Dashboard = () => {
           <>
             <header className="dash-page-head dash-visao-head">
               <div className="dash-page-head__titles">
-                <h1>Visão Geral</h1>
+                <h1>
+                  Visão Geral
+                  <span className="dash-live-badge" title="Atualiza automaticamente">
+                    <span className="dash-live-badge__dot" aria-hidden />
+                    LIVE
+                  </span>
+                </h1>
               </div>
               {pode('membros', 'r') && (
                 <div className="dash-page-head__actions">

@@ -18,6 +18,9 @@ type Props = {
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (c: CobrancaComMembro, next: boolean) => void;
+  onToggleSelectGroup?: (items: CobrancaComMembro[], next: boolean) => void;
 };
 
 function hojeIso() {
@@ -65,7 +68,16 @@ export function totalAbertoLista(rows: CobrancaComMembro[]) {
 
 export { groupCobrancasPorMembro };
 
-export function CobrancasTable({ groups, rows, onEdit, onDelete, onRefresh }: Props) {
+export function CobrancasTable({
+  groups,
+  rows,
+  onEdit,
+  onDelete,
+  onRefresh,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectGroup,
+}: Props) {
   const lista = groups ?? (rows ? groupCobrancasPorMembro(rows) : []);
 
   if (lista.length === 0) {
@@ -81,6 +93,9 @@ export function CobrancasTable({ groups, rows, onEdit, onDelete, onRefresh }: Pr
           onEdit={onEdit}
           onDelete={onDelete}
           onRefresh={onRefresh}
+          selectedIds={selectedIds}
+          onToggleSelect={onToggleSelect}
+          onToggleSelectGroup={onToggleSelectGroup}
         />
       ))}
     </div>
