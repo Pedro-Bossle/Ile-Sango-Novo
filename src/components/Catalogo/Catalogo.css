@@ -38,8 +38,8 @@
 }
 
 .catalogo-section--home .catalogo-card {
-  flex: 0 1 280px;
-  max-width: min(100%, 340px);
+  flex: 0 1 360px;
+  max-width: min(100%, 420px);
   width: 100%;
 }
 
@@ -156,21 +156,20 @@
 
 .catalogo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 1.35rem;
   width: 100%;
   max-width: 1100px;
   margin: 0 auto;
 }
 
-/* Página /catalogo: 4 por linha; menos de 4 na última linha → centralizado (mesma lógica dos eventos) */
 .catalogo-grid.catalogo-grid--page {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   align-items: stretch;
   gap: 1.25rem;
-  max-width: 1320px;
+  max-width: 1100px;
   margin-left: auto;
   margin-right: auto;
   grid-template-columns: none;
@@ -179,66 +178,86 @@
 .catalogo-grid.catalogo-grid--page .catalogo-card {
   --catalogo-col-gap: 1.25rem;
   box-sizing: border-box;
-  flex: 0 1 calc((100% - 3 * var(--catalogo-col-gap)) / 4);
-  width: calc((100% - 3 * var(--catalogo-col-gap)) / 4);
-  max-width: calc((100% - 3 * var(--catalogo-col-gap)) / 4);
+  flex: 0 1 calc((100% - var(--catalogo-col-gap)) / 2);
+  width: calc((100% - var(--catalogo-col-gap)) / 2);
+  max-width: calc((100% - var(--catalogo-col-gap)) / 2);
   min-width: 0;
 }
 
 .catalogo-card {
   border: 1px solid rgba(83, 5, 38, 0.14);
   border-radius: 16px;
-  padding: 1.1rem 1.1rem 1rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  background: linear-gradient(165deg, #fffef9 0%, #ffffff 45%, #faf6f0 100%);
-  min-height: 320px;
+  gap: 0;
+  background: #fff;
+  min-height: 0;
   box-shadow: 0 4px 18px rgba(83, 5, 38, 0.08);
   transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  overflow: hidden;
 }
 
 .catalogo-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(197, 124, 29, 0.45);
+  transform: translateY(-2px);
+  border-color: rgba(197, 124, 29, 0.4);
   box-shadow: 0 10px 28px rgba(83, 5, 38, 0.12), 0 2px 10px rgba(197, 124, 29, 0.1);
 }
 
-.catalogo-card-top {
-  display: flex;
-  justify-content: flex-start;
-  align-items: center;
+.catalogo-card__head {
+  display: grid;
+  gap: 0.45rem;
+  padding: 1.05rem 1.1rem 0.75rem;
+  background: linear-gradient(165deg, #fffef9 0%, #ffffff 70%);
 }
 
 .catalogo-categoria-badge {
   display: inline-block;
+  width: fit-content;
   background: rgba(236, 207, 121, 0.22);
   color: var(--marrom);
   border: 1px solid rgba(197, 124, 29, 0.28);
   border-radius: 8px;
-  padding: 0.32rem 0.65rem;
+  padding: 0.28rem 0.6rem;
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-.catalogo-nome-valor {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-}
-
 .catalogo-nome {
   margin: 0;
-  flex: 1;
-  min-width: 0;
   font-family: var(--fonte-secundaria);
   color: var(--bordo);
-  font-size: clamp(1.02rem, 1.8vw, 1.14rem);
+  font-size: clamp(1.05rem, 1.8vw, 1.2rem);
   font-weight: 700;
   line-height: 1.28;
+}
+
+.catalogo-descricao {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--cinza-fonte);
+  font-size: 0.9rem;
+}
+
+.catalogo-card__opcao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 1.1rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
+  background: #f7f2ec;
+  border: 1px solid #eadfd4;
+}
+
+.catalogo-card__opcao-nome {
+  color: #2c221c;
+  font-size: 1rem;
+  font-weight: 650;
+  min-width: 0;
 }
 
 .catalogo-valor {
@@ -246,21 +265,13 @@
   flex-shrink: 0;
   color: var(--amarelo-dourado);
   font-weight: 700;
-  font-size: 0.98rem;
+  font-size: 0.95rem;
   white-space: nowrap;
-  padding: 0.32rem 0.6rem;
+  padding: 0.28rem 0.55rem;
   border-radius: 8px;
   background: rgba(236, 207, 121, 0.2);
   border: 1px solid rgba(197, 124, 29, 0.3);
   line-height: 1.2;
-}
-
-.catalogo-descricao {
-  margin: 0;
-  line-height: 1.5;
-  flex-grow: 1;
-  color: var(--cinza-fonte);
-  font-size: 0.9rem;
 }
 
 .catalogo-card-bottom {
@@ -268,27 +279,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
-  padding-top: 0.65rem;
-  border-top: 1px solid rgba(83, 5, 38, 0.1);
-}
-
-.catalogo-variacoes-wrap {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  min-height: 36px;
-  align-content: flex-start;
-}
-
-.catalogo-variacao-badge {
-  display: inline-block;
-  border: 1px solid rgba(83, 5, 38, 0.1);
-  border-radius: 10px;
-  padding: 0.38rem 0.65rem;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--cinza-fonte);
-  background: rgba(83, 5, 38, 0.04);
+  padding: 0.85rem 1.1rem 1.05rem;
 }
 
 .catalogo-whatsapp-button {
@@ -411,17 +402,17 @@
 
 @media (max-width: 1220px) {
   .catalogo-grid.catalogo-grid--page .catalogo-card {
-    flex: 0 1 calc((100% - 2 * var(--catalogo-col-gap)) / 3);
-    width: calc((100% - 2 * var(--catalogo-col-gap)) / 3);
-    max-width: calc((100% - 2 * var(--catalogo-col-gap)) / 3);
+    flex: 0 1 calc((100% - var(--catalogo-col-gap)) / 2);
+    width: calc((100% - var(--catalogo-col-gap)) / 2);
+    max-width: calc((100% - var(--catalogo-col-gap)) / 2);
   }
 }
 
 @media (max-width: 900px) {
   .catalogo-grid.catalogo-grid--page .catalogo-card {
-    flex: 0 1 calc((100% - var(--catalogo-col-gap)) / 2);
-    width: calc((100% - var(--catalogo-col-gap)) / 2);
-    max-width: calc((100% - var(--catalogo-col-gap)) / 2);
+    flex: 0 1 100%;
+    width: 100%;
+    max-width: 520px;
   }
 }
 
@@ -430,9 +421,9 @@
     grid-template-columns: 1fr;
   }
 
-  .catalogo-nome-valor {
-    flex-direction: column;
-    align-items: flex-start;
+  .catalogo-card__opcao {
+    margin: 0 0.95rem;
+    flex-wrap: wrap;
   }
 
   .catalogo-valor {
@@ -442,6 +433,33 @@
   .catalogo-grid.catalogo-grid--page .catalogo-card {
     flex: 0 1 100%;
     width: 100%;
-    max-width: 420px;
+    max-width: 100%;
+  }
+
+  .catalogo-whatsapp-button {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .catalogo-section--home .catalogo-card {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 420px) {
+  .catalogo-hero__title {
+    font-size: 1.65rem;
+  }
+
+  .catalogo-hero__lead {
+    font-size: 0.92rem;
+  }
+
+  .catalogo-card__head {
+    padding: 0.95rem;
+  }
+
+  .catalogo-card-bottom {
+    padding: 0.75rem 0.95rem 0.95rem;
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import Lenis from 'lenis';
 import 'lenis/dist/lenis.css';
@@ -15,17 +15,16 @@ import TermosDeUso from './pages/TermosDeUso';
 import PoliticaPrivacidade from './pages/PoliticaPrivacidade';
 import TrocarSenha from './pages/TrocarSenha';
 import Dashboard from './pages/Dashboard';
+import CadastroMembroPublico from './pages/CadastroMembroPublico';
 
 function App() {
   const location = useLocation();
   const lenisRef = useRef(null);
-  const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Lenis só no site público. Na dashboard, `stop()` aplica overflow:clip e
   // preventDefault na roda — bloqueia o scroll nativo (ex.: editar membro).
   useEffect(() => {
     const onDashboard = location.pathname.startsWith('/dashboard');
-    setShowScrollTop(false);
 
     if (onDashboard) {
       window.scrollTo(0, 0);
@@ -41,10 +40,6 @@ function App() {
       rafId = requestAnimationFrame(raf);
     }
     rafId = requestAnimationFrame(raf);
-    const onScroll = () => {
-      setShowScrollTop(lenis.scroll > 200);
-    };
-    lenis.on('scroll', onScroll);
     lenis.scrollTo(0, { immediate: true });
 
     return () => {
@@ -55,15 +50,7 @@ function App() {
     };
   }, [location.pathname]);
 
-  const scrollToTop = useCallback(() => {
-    lenisRef.current?.scrollTo(0, { duration: 1.2 });
-  }, []);
-
-  const renderWithLayout = (page) => (
-    <Layout showScrollTop={showScrollTop} onScrollTop={scrollToTop}>
-      {page}
-    </Layout>
-  );
+  const renderWithLayout = (page) => <Layout>{page}</Layout>;
 
   return (
     <Routes>
@@ -78,6 +65,8 @@ function App() {
       <Route path="/login" element={renderWithLayout(<Login />)} />
       <Route path="/redefinir-senha" element={renderWithLayout(<RedefinirSenha />)} />
       <Route path="/trocar-senha" element={renderWithLayout(<TrocarSenha />)} />
+      <Route path="/cadastrar_membro" element={renderWithLayout(<CadastroMembroPublico />)} />
+      <Route path="/cadastro/:token" element={renderWithLayout(<CadastroMembroPublico />)} />
       <Route path="/dashboard" element={<Dashboard />} />
     </Routes>
   );

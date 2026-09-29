@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchQualidadesPorOrixa } from '../../../services/orixasQualidades';
 import type { Orixa, Qualidade } from '../../../types/database';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 
 type Props = {
   label: string;
@@ -53,35 +54,44 @@ export function OrixaQualidadePair({
 
   const disabledQual = !orixaId || loading;
 
+  const orixaOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: '—' },
+      ...orixas.map((o) => ({ value: String(o.id), label: o.nome })),
+    ],
+    [orixas],
+  );
+
+  const qualidadeOptions = useMemo((): SearchableSelectOption[] => {
+    const emptyLabel = disabledQual && orixaId ? (loading ? 'Carregando…' : '—') : '—';
+    return [{ value: '', label: emptyLabel, disabled: loading && !!orixaId }, ...qualidades.map((q) => ({ value: String(q.id), label: q.nome }))];
+  }, [qualidades, disabledQual, orixaId, loading]);
+
   return (
     <div className="dash-orixa-pair">
       <h3 className="dash-orixa-pair__label">{label}</h3>
       <div className="dash-form-grid dash-form-grid--pair">
         <label className="dash-field">
           <span>Orisá</span>
-          <select value={orixaId} onChange={(e) => onOrixaChange(e.target.value)}>
-            <option value="">—</option>
-            {orixas.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.nome}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={orixaOptions}
+            value={orixaId}
+            onChange={onOrixaChange}
+            searchPlaceholder="Buscar orisá…"
+            aria-label="Orisá"
+          />
         </label>
         <label className="dash-field">
           <span>Qualidade</span>
-          <select
+          <SearchableSelect
+            options={qualidadeOptions}
             value={qualidadeId}
             disabled={disabledQual}
-            onChange={(e) => onQualidadeChange(e.target.value)}
-          >
-            <option value="">{disabledQual && orixaId ? (loading ? 'Carregando…' : '—') : '—'}</option>
-            {qualidades.map((q) => (
-              <option key={q.id} value={q.id}>
-                {q.nome}
-              </option>
-            ))}
-          </select>
+            onChange={onQualidadeChange}
+            placeholder={loading && orixaId ? 'Carregando…' : '—'}
+            searchPlaceholder="Buscar qualidade…"
+            aria-label="Qualidade"
+          />
         </label>
       </div>
       {onRezaChange && (

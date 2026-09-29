@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { fetchQualidadesPorOrixa } from '../../../services/orixasQualidades';
 import { fetchSobrenomesOrisa, type SobrenomeOrisaRow } from '../../../services/sobrenomesOrisa';
 import type { Orixa, Qualidade } from '../../../types/database';
@@ -128,6 +129,30 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
 
   const placeholderReza = nomeOrixa ? `Digite a reza de ${nomeOrixa}…` : 'Digite a reza…';
 
+  const orixaOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: '—' },
+      ...orixas.map((o) => ({ value: String(o.id), label: o.nome })),
+    ],
+    [orixas],
+  );
+
+  const qualidadeOptions = useMemo((): SearchableSelectOption[] => {
+    const emptyLabel = disabledQual && orixaId ? (loadingQual ? 'Carregando…' : '—') : '—';
+    return [
+      { value: '', label: emptyLabel, disabled: loadingQual && !!orixaId },
+      ...qualidades.map((q) => ({ value: String(q.id), label: q.nome })),
+    ];
+  }, [qualidades, disabledQual, orixaId, loadingQual]);
+
+  const sobrenomeOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: '—' },
+      ...sobrenomes.map((s) => ({ value: String(s.id), label: s.nome })),
+    ],
+    [sobrenomes],
+  );
+
   return (
     <div className="dash-orisa-quad">
       <h3 className="dash-orixa-pair__label">{label}</h3>
@@ -135,45 +160,36 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
       <div className="dash-orisa-quad__row4">
         <label className="dash-field">
           <span>Orisá</span>
-          <select value={orixaId} onChange={(e) => setCadastroField(f.orixa, e.target.value)}>
-            <option value="">—</option>
-            {orixas.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.nome}
-              </option>
-            ))}
-          </select>
+          <SearchableSelect
+            options={orixaOptions}
+            value={orixaId}
+            onChange={(v) => setCadastroField(f.orixa, v)}
+            searchPlaceholder="Buscar orisá…"
+            aria-label="Orisá"
+          />
         </label>
         <label className="dash-field">
           <span>Qualidade</span>
-          <select
+          <SearchableSelect
+            options={qualidadeOptions}
             value={qualidadeId}
             disabled={disabledQual}
-            onChange={(e) => setCadastroField(f.qualidade, e.target.value)}
-          >
-            <option value="">{disabledQual && orixaId ? (loadingQual ? 'Carregando…' : '—') : '—'}</option>
-            {qualidades.map((q) => (
-              <option key={q.id} value={q.id}>
-                {q.nome}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setCadastroField(f.qualidade, v)}
+            placeholder={loadingQual && orixaId ? 'Carregando…' : '—'}
+            searchPlaceholder="Buscar qualidade…"
+            aria-label="Qualidade"
+          />
         </label>
         <label className="dash-field">
           <span>Sobrenome do Orisá</span>
-          <select
+          <SearchableSelect
+            options={sobrenomeOptions}
             value={String(cadastro[f.sobrenome] ?? '')}
             disabled={disabledSobrenome}
-            onChange={(e) => setCadastroField(f.sobrenome, e.target.value)}
-            aria-busy={loadingSob}
-          >
-            <option value="">—</option>
-            {sobrenomes.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.nome}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setCadastroField(f.sobrenome, v)}
+            searchPlaceholder="Buscar sobrenome…"
+            aria-label="Sobrenome do Orisá"
+          />
         </label>
         <label className="dash-field">
           <span>Digina</span>
@@ -189,7 +205,7 @@ export function OrisaQuadBlock({ label, section, orixas, cadastro, setCadastroFi
       {section === 'cabeca' && (
         <div className="dash-orisa-quad__row2">
           <label className="dash-field">
-            <span>Data de Feitura de Bori</span>
+            <span>Data de Feitura do Bori</span>
             <input
               type="date"
               value={String(cadastro.data_feitura_bori ?? '')}

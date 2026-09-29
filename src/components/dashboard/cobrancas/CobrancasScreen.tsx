@@ -1,41 +1,65 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchCaixaCategorias } from '../../../services/caixa';
 import {
-  cobrancaPassaFiltroIntervalo,
   deleteCobranca,
   fetchRelatorioValoresPagos,
   fetchCobrancasComMembros,
-  filtroPeriodoVazio,
   insertCobranca,
   isCobrancaPendente,
+  isCobrancaContabilizavel,
+  cobrancaAposEntrada,
   isMensalidadeTipo,
   registrarPagamento,
   updateCobranca,
   valorSaldoCobranca,
+  valorTotalCobranca,
+  valorPagoCobranca,
   type CobrancaComMembro,
-  type FiltroPeriodoCobranca,
   type LinhaRelatorioValoresPagos,
 } from '../../../services/cobrancas';
+import { matchesSearchFields } from '../../../utils/searchFold';
 import { fetchPessoasOptions } from '../../../services/pessoasLookup';
+import { fetchConfigIle, formatarEnderecoIle } from '../../../services/configIle';
+import { writeAuditLog, buildAuditDiff } from '../../../services/auditLog';
 import { formatDateBR } from '../../../utils/formatDate';
+import { parseValorInput, sanitizeValorInput, valorToMaskedInput } from '../../../utils/money';
 import { gerarPdfRelatorio, type LinhaRelatorio } from '../../../utils/pdfRelatorio';
+import { carregarLogoBase64 } from '../../../utils/logoBase64';
 import { Toast } from '../Toast';
 import { CobrancaForm, type CobrancaFormValues } from './CobrancaForm';
-import { CobrancasTable } from './CobrancasTable';
+import { CobrancasTable, groupCobrancasPorMembro } from './CobrancasTable';
+import { statusCobrancaUi } from './CobrancaRow';
 import { PaginationControls } from '../PaginationControls';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { resolvePessoaIdCobranca, type CobrancaTipo } from '../../../types/database';
+import './Cobrancas.css';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
+import { FORMA_PAGAMENTO_PADRAO, FORMAS_PAGAMENTO, type FormaPagamento } from '../../../lib/formasPagamento';
+import { resolvePessoaIdCobranca } from '../../../types/database';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
 
-export function CobrancasScreen() {
+type Props = { canSend?: boolean };
+
+const COBRANCA_FIELD_LABELS: Record<string, string> = {
+  membro_nome: 'Membro',
+  valor: 'Valor',
+  data: 'Vencimento',
+  descricao: 'Descrição',
+  tipo: 'Categoria',
+};
+
+export function CobrancasScreen({ canSend = true }: Props) {
   const [rows, setRows] = useState<CobrancaComMembro[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rascunhoPeriodo, setRascunhoPeriodo] = useState<FiltroPeriodoCobranca>(filtroPeriodoVazio);
-  const [periodoAplicado, setPeriodoAplicado] = useState<FiltroPeriodoCobranca | null>(null);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CobrancaComMembro | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<CobrancaComMembro | null>(null);
   const [buscaMembro, setBuscaMembro] = useState('');
+  const [statusFiltro, setStatusFiltro] = useState<'todas' | 'em_aberto' | 'atrasada'>('todas');
+  const [ordenacao, setOrdenacao] = useState<'nome-asc' | 'nome-desc' | 'venc-asc' | 'venc-desc' | 'valor-desc'>('nome-asc');
+  const [maisOpen, setMaisOpen] = useState(false);
+  const [ileNome, setIleNome] = useState('Ilê');
+  const [ileLogo, setIleLogo] = useState<string | null>(null);
+  const [ileEndereco, setIleEndereco] = useState('');
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [page, setPage] = useState(1);
@@ -46,17 +70,17 @@ export function CobrancasScreen() {
     valor: string;
     descricao: string;
   }>({
-    tipo: 'mensalidade',
+    tipo: 'Obrigação',
     data: '',
-    valor: '50.00',
+    valor: valorToMaskedInput(50),
     descricao: '',
   });
-  const [mostrarPagas, setMostrarPagas] = useState(() => localStorage.getItem('cobrancas_mostrar_pagas') !== 'false');
+  const [categoriaOptions, setCategoriaOptions] = useState<SearchableSelectOption[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionOpen, setBulkActionOpen] = useState<'pagar' | 'excluir' | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [bulkPagamentoData, setBulkPagamentoData] = useState(new Date().toISOString().slice(0, 10));
-  const [bulkPagamentoForma, setBulkPagamentoForma] = useState('PIX');
+  const [bulkPagamentoForma, setBulkPagamentoForma] = useState(FORMA_PAGAMENTO_PADRAO);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportLoading, setReportLoading] = useState(false);
   const [reportRows, setReportRows] = useState<LinhaRelatorioValoresPagos[]>([]);
@@ -64,7 +88,7 @@ export function CobrancasScreen() {
     de: string;
     ate: string;
     pessoaId: string;
-    tipo: CobrancaTipo | '';
+    tipo: string;
   }>({
     de: '',
     ate: '',
@@ -72,50 +96,162 @@ export function CobrancasScreen() {
     tipo: '',
   });
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  const reload = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoading(true);
     try {
       const data = await fetchCobrancasComMembros();
-      setRows(data);
+      setRows(data.filter((c) => !isMensalidadeTipo(c)));
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao carregar cobranças.', variant: 'error' });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     void reload();
+    fetchConfigIle()
+      .then(async (c) => {
+        setIleNome(c.nome_ile?.trim() || 'Ilê');
+        setIleEndereco(formatarEnderecoIle(c));
+        if (c.logo_base64) {
+          setIleLogo(c.logo_base64);
+        } else {
+          const fallback = await carregarLogoBase64();
+          setIleLogo(fallback);
+        }
+      })
+      .catch(() => {
+        void carregarLogoBase64().then(setIleLogo);
+      });
+    fetchCaixaCategorias()
+      .then((cats) => {
+        const opts = cats
+          .filter((c) => (c.tipo === 'entrada' || c.tipo === 'ambos') && c.nome.toLowerCase() !== 'mensalidade')
+          .map((c) => ({ value: c.nome, label: c.nome }));
+        if (opts.length) {
+          setCategoriaOptions(opts);
+          setBulkValues((v) => {
+            if (opts.some((o) => o.value === v.tipo)) return v;
+            const prefer =
+              opts.find((o) => o.value === 'Obrigação')?.value ||
+              opts.find((o) => o.value === 'Cobrança')?.value ||
+              opts.find((o) => o.value === 'Outro')?.value ||
+              opts[0]!.value;
+            return { ...v, tipo: prefer };
+          });
+        }
+      })
+      .catch(() => undefined);
   }, [reload]);
+
+  const bulkCategoriaOptions = useMemo((): SearchableSelectOption[] => {
+    if (!bulkValues.tipo) return categoriaOptions;
+    if (categoriaOptions.some((o) => o.value === bulkValues.tipo)) return categoriaOptions;
+    return [{ value: bulkValues.tipo, label: bulkValues.tipo }, ...categoriaOptions];
+  }, [categoriaOptions, bulkValues.tipo]);
+
+  const carregarCategoriasFluxo = useCallback(async () => {
+    const cats = await fetchCaixaCategorias();
+    const opts = cats
+      .filter((c) => (c.tipo === 'entrada' || c.tipo === 'ambos') && c.nome.toLowerCase() !== 'mensalidade')
+      .map((c) => ({ value: c.nome, label: c.nome }));
+    setCategoriaOptions(opts);
+    setBulkValues((v) => {
+      if (opts.some((o) => o.value === v.tipo)) return v;
+      const prefer =
+        opts.find((o) => o.value === 'Obrigação')?.value ||
+        opts.find((o) => o.value === 'Cobrança')?.value ||
+        opts.find((o) => o.value === 'Outro')?.value ||
+        opts[0]?.value ||
+        'Obrigação';
+      return { ...v, tipo: prefer };
+    });
+    return opts;
+  }, []);
 
   const filtered = useMemo(() => {
     let list = rows;
-    if (!mostrarPagas) {
-      list = list.filter((c) => isCobrancaPendente(c));
-    }
-    if (periodoAplicado?.de && periodoAplicado?.ate) {
-      list = list.filter((c) => cobrancaPassaFiltroIntervalo(c, periodoAplicado));
-    }
-    const q = buscaMembro.trim().toLowerCase();
+    const q = buscaMembro.trim();
     if (q) {
       list = list.filter((c) => {
-        const nome = (c.membro_nome || c.membro || '').toLowerCase();
-        return nome.includes(q);
+        const nome = c.membro_nome || c.membro || '';
+        const desc = c.descricao || '';
+        return matchesSearchFields(q, nome, desc);
       });
     }
-    return list;
-  }, [rows, mostrarPagas, periodoAplicado, buscaMembro]);
+    if (statusFiltro !== 'todas') {
+      list = list.filter((c) => statusCobrancaUi(c) === statusFiltro);
+    }
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (ordenacao) {
+        case 'nome-desc':
+          return (b.membro_nome || '').localeCompare(a.membro_nome || '', 'pt-BR', { sensitivity: 'base' });
+        case 'venc-asc':
+          return (a.vencimento || '').localeCompare(b.vencimento || '');
+        case 'venc-desc':
+          return (b.vencimento || '').localeCompare(a.vencimento || '');
+        case 'valor-desc':
+          return valorSaldoCobranca(b) - valorSaldoCobranca(a);
+        case 'nome-asc':
+        default:
+          return (a.membro_nome || '').localeCompare(b.membro_nome || '', 'pt-BR', { sensitivity: 'base' });
+      }
+    });
+    return sorted;
+  }, [rows, buscaMembro, statusFiltro, ordenacao]);
 
-  const totalCobrancas = filtered.length;
-  const cobrancasPaginadas = useMemo(() => {
+  const grupos = useMemo(() => {
+    const g = groupCobrancasPorMembro(filtered);
+    // Ordena grupos pelo critério atual (totais / nome / vencimento mais próximo).
+    return [...g].sort((a, b) => {
+      switch (ordenacao) {
+        case 'nome-desc':
+          return b.nome.localeCompare(a.nome, 'pt-BR', { sensitivity: 'base' });
+        case 'venc-asc': {
+          const va = a.items.map((c) => c.vencimento || '9999').sort()[0] || '';
+          const vb = b.items.map((c) => c.vencimento || '9999').sort()[0] || '';
+          return va.localeCompare(vb);
+        }
+        case 'venc-desc': {
+          const va = a.items.map((c) => c.vencimento || '').sort().reverse()[0] || '';
+          const vb = b.items.map((c) => c.vencimento || '').sort().reverse()[0] || '';
+          return vb.localeCompare(va);
+        }
+        case 'valor-desc': {
+          const sa = a.items.reduce((s, c) => s + valorSaldoCobranca(c), 0);
+          const sb = b.items.reduce((s, c) => s + valorSaldoCobranca(c), 0);
+          return sb - sa;
+        }
+        case 'nome-asc':
+        default:
+          return a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
+      }
+    });
+  }, [filtered, ordenacao]);
+
+  const totalGrupos = grupos.length;
+  const gruposPaginados = useMemo(() => {
     const start = (page - 1) * pageSize;
-    return filtered.slice(start, start + pageSize);
-  }, [filtered, page, pageSize]);
+    return grupos.slice(start, start + pageSize);
+  }, [grupos, page, pageSize]);
+
+  const kpis = useMemo(() => {
+    let recebido = 0;
+    let emAberto = 0;
+    for (const c of filtered) {
+      recebido += valorPagoCobranca(c);
+      emAberto += valorSaldoCobranca(c);
+    }
+    return { recebido, emAberto };
+  }, [filtered]);
 
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(totalCobrancas / pageSize));
+    const totalPages = Math.max(1, Math.ceil(totalGrupos / pageSize));
     if (page > totalPages) setPage(totalPages);
-  }, [totalCobrancas, page, pageSize]);
+  }, [totalGrupos, page, pageSize]);
 
   useEffect(() => {
     localStorage.setItem('cobrancas_page_size', String(pageSize));
@@ -123,15 +259,11 @@ export function CobrancasScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, mostrarPagas]);
+  }, [buscaMembro, statusFiltro, ordenacao]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, pageSize, buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, mostrarPagas]);
-
-  useEffect(() => {
-    localStorage.setItem('cobrancas_mostrar_pagas', mostrarPagas ? 'true' : 'false');
-  }, [mostrarPagas]);
+  }, [page, pageSize, buscaMembro, statusFiltro]);
 
   const reportModalRef = useRef<HTMLDivElement | null>(null);
   const reportTableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -164,44 +296,51 @@ export function CobrancasScreen() {
     return () => modal.removeEventListener('wheel', onWheel);
   }, [reportOpen]);
 
-  /** Soma dos saldos em aberto respeitando a mesma lista filtrada da tabela (período + nome). */
-  const subtotalAberto = useMemo(() => {
-    return filtered.filter((c) => isCobrancaPendente(c)).reduce((a, c) => a + valorSaldoCobranca(c), 0);
-  }, [filtered]);
-
   const formatBRL = (n: number) =>
     n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
 
+  /** Uma linha por pessoa: soma de todo o saldo em aberto dela. */
   const montarLinhasPdf = (lista: CobrancaComMembro[]): LinhaRelatorio[] => {
-    return lista
-      .filter((c) => isCobrancaPendente(c))
-      .map((c) => ({
-        nome: c.membro_nome,
-        data: formatDateBR(c.vencimento ?? c.created_at?.slice(0, 10) ?? null),
-        descricao: c.descricao || '—',
-        valor: valorSaldoCobranca(c),
-        tipo: c.tipo,
+    const map = new Map<string, { nome: string; valor: number }>();
+    for (const c of lista) {
+      if (!isCobrancaContabilizavel(c)) continue;
+      const saldo = valorSaldoCobranca(c);
+      if (saldo <= 0) continue;
+      const pid = resolvePessoaIdCobranca(c);
+      const nome = (c.membro_nome || c.membro || 'Membro').trim() || 'Membro';
+      const key = pid ? `p:${pid}` : `n:${nome.toLowerCase()}`;
+      const cur = map.get(key) ?? { nome, valor: 0 };
+      cur.valor += saldo;
+      if (!cur.nome || cur.nome === 'Membro') cur.nome = nome;
+      map.set(key, cur);
+    }
+    return [...map.values()]
+      .filter((g) => g.valor > 0)
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }))
+      .map((g) => ({
+        nome: g.nome,
+        data: '',
+        descricao: '',
+        valor: Math.round(g.valor * 100) / 100,
       }));
   };
 
-  const aplicarFiltro = () => {
-    const { de, ate } = rascunhoPeriodo;
-    if (!de || !ate) {
-      setToast({ msg: 'Preencha data inicial e final.', variant: 'error' });
-      return;
+  const copiarLista = async () => {
+    const linhas = montarLinhasPdf(filtered);
+    const total = linhas.reduce((a, b) => a + b.valor, 0);
+    const texto = [
+      'Cobranças em aberto',
+      '',
+      ...linhas.map((l) => `${l.nome} — ${formatBRL(l.valor)}`),
+      '',
+      `Total em aberto — ${formatBRL(total)}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(texto);
+      setToast({ msg: 'Lista copiada.', variant: 'success' });
+    } catch {
+      setToast({ msg: 'Não foi possível copiar.', variant: 'error' });
     }
-    if (de > ate) {
-      setToast({ msg: 'A data inicial não pode ser maior que a final.', variant: 'error' });
-      return;
-    }
-    setPeriodoAplicado({ de, ate });
-  };
-
-  const limparFiltros = () => {
-    setRascunhoPeriodo(filtroPeriodoVazio());
-    setPeriodoAplicado(null);
-    setBuscaMembro('');
-    setPage(1);
   };
 
   const openNovo = () => {
@@ -222,77 +361,138 @@ export function CobrancasScreen() {
       setToast({ msg: 'Membro não encontrado.', variant: 'error' });
       return;
     }
+    const valorNum = parseValorInput(values.valor);
+    if (valorNum == null || valorNum < 0) {
+      setToast({ msg: 'Informe um valor válido.', variant: 'error' });
+      return;
+    }
+    if (!cobrancaAposEntrada(values.data, p?.data_entrada)) {
+      setToast({
+        msg: `Vencimento anterior à data de entrada do membro (${p?.data_entrada?.slice(0, 10) || '—'}).`,
+        variant: 'error',
+      });
+      return;
+    }
+    const after = {
+      membro_nome: nome,
+      valor: valorNum,
+      data: values.data,
+      descricao: values.descricao || null,
+      tipo: values.tipo,
+    };
     if (editing) {
+      const before = {
+        membro_nome: editing.membro_nome,
+        valor: valorTotalCobranca(editing),
+        data: editing.vencimento,
+        descricao: editing.descricao || null,
+        tipo: editing.tipo,
+      };
       await updateCobranca(editing.id, {
         pessoa_id: values.pessoa_id,
         membro_nome: nome,
-        valor: values.valor,
+        valor: valorNum,
         data: values.data,
         descricao: values.descricao || null,
         tipo: values.tipo,
+      });
+      await writeAuditLog({
+        action: 'update',
+        entity: 'cobrancas',
+        entity_id: editing.id,
+        resumo: nome,
+        diff: buildAuditDiff('Cobranças', before, after, COBRANCA_FIELD_LABELS),
       });
       setToast({ msg: 'Cobrança atualizada.', variant: 'success' });
     } else {
       await insertCobranca({
         pessoa_id: values.pessoa_id,
         membro_nome: nome,
-        valor: values.valor,
+        valor: valorNum,
         data: values.data,
         descricao: values.descricao || null,
         tipo: values.tipo,
+        parcelas: Number.parseInt(values.parcelas, 10) || 1,
       });
-      setToast({ msg: 'Cobrança criada.', variant: 'success' });
+      await writeAuditLog({
+        action: 'create',
+        entity: 'cobrancas',
+        resumo: nome,
+        diff: buildAuditDiff('Cobranças', null, after, COBRANCA_FIELD_LABELS),
+      });
+      const nParc = Number.parseInt(values.parcelas, 10) || 1;
+      setToast({
+        msg: nParc > 1 ? `Cobrança criada em ${nParc} parcelas.` : 'Cobrança criada.',
+        variant: 'success',
+      });
     }
-    await reload();
+    await reload({ silent: true });
   };
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const targetId = deleteTarget.id;
     try {
-      await deleteCobranca(deleteTarget.id);
+      const before = {
+        membro_nome: deleteTarget.membro_nome,
+        valor: valorTotalCobranca(deleteTarget),
+        data: deleteTarget.vencimento,
+        descricao: deleteTarget.descricao || null,
+        tipo: deleteTarget.tipo,
+      };
+      setRows((prev) => prev.filter((r) => String(r.id) !== String(targetId)));
       setDeleteTarget(null);
+      await deleteCobranca(targetId);
+      await writeAuditLog({
+        action: 'delete',
+        entity: 'cobrancas',
+        entity_id: targetId,
+        resumo: deleteTarget.membro_nome,
+        diff: buildAuditDiff('Cobranças', before, null, COBRANCA_FIELD_LABELS),
+      });
       setToast({ msg: 'Cobrança excluída.', variant: 'success' });
-      await reload();
+      await reload({ silent: true });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao excluir.', variant: 'error' });
+      await reload({ silent: true });
     }
   };
 
-  const gerarRelatorioPorNome = () => {
-    if (!buscaMembro.trim()) {
-      setToast({ msg: 'Digite um nome na pesquisa antes de gerar o relatório por nome.', variant: 'error' });
+  const gerarRelatorioObrigacoesAberto = () => {
+    const linhas = montarLinhasPdf(filtered);
+    if (!linhas.length) {
+      setToast({ msg: 'Nenhum valor em aberto para o relatório.', variant: 'error' });
       return;
     }
-    const linhas = montarLinhasPdf(filtered);
     const total = linhas.reduce((a, b) => a + b.valor, 0);
     gerarPdfRelatorio({
-      periodo: periodoAplicado,
+      periodo: null,
       linhas,
       total,
-      tituloPrincipal: 'Relatório por nome — saldos em aberto',
-      subtitulo: `Pesquisa: “${buscaMembro.trim()}”.`,
-    });
-  };
-
-  const gerarRelatorioMensalidadesAberto = () => {
-    const linhas = montarLinhasPdf(filtered.filter((c) => isMensalidadeTipo(c)));
-    const total = linhas.reduce((a, b) => a + b.valor, 0);
-    gerarPdfRelatorio({
-      periodo: periodoAplicado,
-      linhas,
-      total,
-      tituloPrincipal: 'Mensalidades em aberto',
-      subtitulo: 'Apenas cobranças do tipo Mensalidade com saldo pendente (filtros atuais).',
+      tituloPrincipal: 'Cobranças em aberto',
+      subtitulo: 'Uma linha por pessoa — total devido.',
+      ileNome,
+      ileEndereco,
+      logoBase64: ileLogo,
+      variante: 'aberto',
+      totalLabel: 'Total em aberto',
+      fileNamePrefix: 'cobrancas-em-aberto',
     });
   };
 
   const abrirCobrancaEmMassa = () => {
+    void carregarCategoriasFluxo().catch(() => undefined);
     setBulkOpen(true);
   };
 
   const criarCobrancaParaTodos = async () => {
     const data = bulkValues.data.trim();
-    const valor = Number(bulkValues.valor);
+    const valor = parseValorInput(bulkValues.valor) ?? NaN;
+    const tipo = bulkValues.tipo.trim();
+    if (!tipo) {
+      setToast({ msg: 'Selecione a categoria do fluxo de caixa.', variant: 'error' });
+      return;
+    }
     if (!data) {
       setToast({ msg: 'Informe o vencimento para cobrança em massa.', variant: 'error' });
       return;
@@ -304,26 +504,50 @@ export function CobrancasScreen() {
 
     setBulkSaving(true);
     try {
+      // Garante lista atualizada das categorias do fluxo antes de gravar.
+      const opts = await carregarCategoriasFluxo();
+      if (!opts.length) {
+        setToast({ msg: 'Cadastre categorias de entrada no fluxo de caixa antes de cobrar em massa.', variant: 'error' });
+        return;
+      }
+      const tipoOk = opts.some((o) => o.value === tipo) ? tipo : opts[0]!.value;
+
       const pessoas = await fetchPessoasOptions();
       if (!pessoas.length) {
         setToast({ msg: 'Não há membros para cobrar.', variant: 'error' });
         return;
       }
 
-      for (const p of pessoas) {
+      const elegiveis = pessoas.filter((p) => cobrancaAposEntrada(data, p.data_entrada));
+      if (!elegiveis.length) {
+        setToast({
+          msg: 'Nenhum membro com data de entrada até a data do vencimento.',
+          variant: 'error',
+        });
+        return;
+      }
+
+      for (const p of elegiveis) {
         await insertCobranca({
           pessoa_id: p.id,
           membro_nome: p.nome,
           valor,
           data,
           descricao: bulkValues.descricao.trim() || null,
-          tipo: bulkValues.tipo,
+          tipo: tipoOk,
         });
       }
 
-      setToast({ msg: `Cobrança criada para ${pessoas.length} membro(s).`, variant: 'success' });
+      const pulados = pessoas.length - elegiveis.length;
+      setToast({
+        msg:
+          pulados > 0
+            ? `Cobrança criada para ${elegiveis.length} membro(s). ${pulados} ignorado(s) (antes da entrada).`
+            : `Cobrança criada para ${elegiveis.length} membro(s).`,
+        variant: 'success',
+      });
       setBulkOpen(false);
-      await reload();
+      await reload({ silent: true });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao criar cobrança em massa.', variant: 'error' });
     } finally {
@@ -333,41 +557,22 @@ export function CobrancasScreen() {
 
   const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(String(r.id))), [rows, selectedIds]);
 
-  const toggleSelect = (id: string | number, checked: boolean) => {
-    const key = String(id);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-  };
-
-  const toggleSelectAllVisible = (ids: Array<string | number>, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => {
-        const key = String(id);
-        if (checked) next.add(key);
-        else next.delete(key);
-      });
-      return next;
-    });
-  };
-
   const executarExcluirEmLote = async () => {
     if (!selectedRows.length) return;
     setBulkActionLoading(true);
+    const ids = selectedRows.map((r) => r.id);
     try {
+      setRows((prev) => prev.filter((r) => !ids.some((id) => String(id) === String(r.id))));
+      setSelectedIds(new Set());
+      setBulkActionOpen(null);
       for (const row of selectedRows) {
         await deleteCobranca(row.id);
       }
       setToast({ msg: `${selectedRows.length} cobrança(s) excluída(s) com sucesso.`, variant: 'success' });
-      setSelectedIds(new Set());
-      setBulkActionOpen(null);
-      await reload();
+      await reload({ silent: true });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao excluir em lote.', variant: 'error' });
+      await reload({ silent: true });
     } finally {
       setBulkActionLoading(false);
     }
@@ -395,7 +600,7 @@ export function CobrancasScreen() {
       setToast({ msg: `${pendentes.length} cobrança(s) marcada(s) como paga(s).`, variant: 'success' });
       setSelectedIds(new Set());
       setBulkActionOpen(null);
-      await reload();
+      await reload({ silent: true });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao pagar cobranças em lote.', variant: 'error' });
     } finally {
@@ -446,6 +651,14 @@ export function CobrancasScreen() {
     return [...map.entries()].map(([id, nome]) => ({ id, nome }));
   }, [rows]);
 
+  const pessoasRelatorioOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: 'Todos' },
+      ...pessoasRelatorio.map((p) => ({ value: p.id, label: p.nome })),
+    ],
+    [pessoasRelatorio],
+  );
+
   const exportarRelatorioCsv = () => {
     const header = ['Data Pagamento', 'Membro', 'Descrição', 'Valor', 'Forma Pagamento'];
     const lines = reportRows.map((r) => [
@@ -466,144 +679,143 @@ export function CobrancasScreen() {
   };
 
   const exportarRelatorioPdf = () => {
-    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    doc.setFontSize(14);
-    doc.text('Relatório de Valores Pagos', 40, 40);
-    autoTable(doc, {
-      startY: 58,
-      head: [['Data', 'Membro', 'Descrição', 'Valor', 'Forma']],
-      body: reportRows.map((r) => [r.data_pagamento, r.membro, r.descricao, formatBRL(r.valor), r.forma_pagamento || '—']),
-      styles: { fontSize: 9 },
-      headStyles: { fillColor: [107, 28, 46] },
+    const periodo =
+      reportFiltro.de && reportFiltro.ate ? { de: reportFiltro.de, ate: reportFiltro.ate } : null;
+    const linhas: LinhaRelatorio[] = reportRows.map((r) => ({
+      nome: r.membro,
+      data: formatDateBR(r.data_pagamento),
+      descricao: r.descricao || '—',
+      valor: r.valor,
+      forma: r.forma_pagamento || '—',
+    }));
+    const total = linhas.reduce((a, b) => a + b.valor, 0);
+    gerarPdfRelatorio({
+      periodo,
+      linhas,
+      total,
+      tituloPrincipal: 'Fluxo de caixa — Valores pagos',
+      subtitulo: `${totaisRelatorio.quantidade} pagamento(s) · Ticket médio ${formatBRL(totaisRelatorio.ticketMedio)}`,
+      ileNome,
+      ileEndereco,
+      logoBase64: ileLogo,
+      variante: 'fluxo',
+      totalLabel: 'Total recebido',
+      fileNamePrefix: 'fluxo-valores-pagos',
     });
-    doc.save(`relatorio-valores-pagos-${Date.now()}.pdf`);
   };
 
 
   return (
-    <>
+    <div className="dash-cob" data-tour="cobrancas">
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-      <h1>Cobranças</h1>
-
-      <div className="dash-filter-bar dash-filter-bar--periodo" data-tour="cobrancas-filtros">
-        <div className="dash-cob-layout-row">
-          <label className="dash-field dash-field--busca-membro">
-            <span>Pesquisar por membro</span>
-            <input
-              type="search"
-              placeholder="Digite o nome…"
-              value={buscaMembro}
-              onChange={(e) => setBuscaMembro(e.target.value)}
-              autoComplete="off"
-              aria-label="Pesquisar cobranças por nome do membro"
-            />
-          </label>
-          <div className="dash-date-range">
-            <label className="dash-field dash-field--inline">
-              <span>De:</span>
-              <input
-                type="date"
-                value={rascunhoPeriodo.de}
-                onChange={(e) => setRascunhoPeriodo((p) => ({ ...p, de: e.target.value }))}
-              />
-            </label>
-            <label className="dash-field dash-field--inline">
-              <span>Até:</span>
-              <input
-                type="date"
-                value={rascunhoPeriodo.ate}
-                onChange={(e) => setRascunhoPeriodo((p) => ({ ...p, ate: e.target.value }))}
-              />
-            </label>
-          </div>
-          <div className="dash-filter-bar__actions">
-            <button type="button" className="dash-btn-primary" onClick={aplicarFiltro}>
-              Filtrar
-            </button>
-            <button type="button" className="dash-btn-secondary" onClick={limparFiltros}>
-              Limpar
-            </button>
-          </div>
+      <header className="dash-page-head dash-cob__header">
+        <div className="dash-page-head__titles">
+          <h1>Cobranças</h1>
+          <p className="dash-muted">
+            Atribua cobranças a membros, registre pagamentos parciais ou totais e acompanhe a quitação. Cada pagamento
+            gera lançamento no fluxo de caixa.
+          </p>
         </div>
-
-        <div className="dash-cob-layout-row dash-cob-layout-row--reports">
-          <p className="dash-muted dash-cob-layout-title">Relatórios</p>
-          <div className="dash-filter-bar__actions">
-            {buscaMembro.trim() && (
-              <button type="button" className="dash-btn-secondary" onClick={gerarRelatorioPorNome}>
-                Relatório por nome
-              </button>
+        <div className="dash-page-head__actions" data-tour="cobrancas-acoes">
+          <button type="button" className="dash-btn-secondary dash-cob__copy" onClick={() => void copiarLista()}>
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden>
+              <path
+                fill="currentColor"
+                d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-2v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h3Zm2 0h5a2 2 0 0 1 2 2v7h2V5H10v2ZM5 9v10h9V9H5Z"
+              />
+            </svg>
+            Copiar lista
+          </button>
+          <div className="dash-cob__mais-wrap">
+            <button
+              type="button"
+              className="dash-btn-secondary"
+              aria-expanded={maisOpen}
+              onClick={() => setMaisOpen((v) => !v)}
+            >
+              Mais
+            </button>
+            {maisOpen && (
+              <div className="dash-cob__mais-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setMaisOpen(false); abrirCobrancaEmMassa(); }}>
+                  Cobrar todos os membros
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setMaisOpen(false); gerarRelatorioObrigacoesAberto(); }}>
+                  Relatório em aberto
+                </button>
+                <button type="button" role="menuitem" onClick={() => { setMaisOpen(false); setReportOpen(true); }}>
+                  Valores pagos (fluxo)
+                </button>
+              </div>
             )}
-            <button type="button" className="dash-btn-secondary" onClick={gerarRelatorioMensalidadesAberto}>
-              Mensalidades em Aberto
-            </button>
-            <button type="button" className="dash-btn-secondary" onClick={() => setReportOpen(true)}>
-              Valores Pagos
-            </button>
           </div>
+          <button type="button" className="dash-add-button" onClick={openNovo}>
+            + Nova cobrança
+          </button>
         </div>
+      </header>
 
-        <div className="dash-cob-layout-row">
-          <label className="dash-toggle-paid">
-            <input type="checkbox" checked={mostrarPagas} onChange={(e) => setMostrarPagas(e.target.checked)} />
-            <span>Exibir valores pagos</span>
-          </label>
-        </div>
+      <div className="dash-cob__toolbar" data-tour="cobrancas-filtros">
+        <label className="dash-cob__busca">
+          <span className="dash-visually-hidden">Buscar</span>
+          <svg className="dash-cob__busca-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden>
+            <path
+              fill="currentColor"
+              d="M10.5 3a7.5 7.5 0 0 1 5.9 12.1l3.75 3.75-1.4 1.4-3.75-3.75A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z"
+            />
+          </svg>
+          <input
+            type="search"
+            placeholder="Buscar membro, descrição…"
+            value={buscaMembro}
+            onChange={(e) => setBuscaMembro(e.target.value)}
+            autoComplete="off"
+            aria-label="Buscar membro ou descrição"
+          />
+        </label>
+        <label className="dash-cob__select">
+          <span className="dash-visually-hidden">Status</span>
+          <select value={statusFiltro} onChange={(e) => setStatusFiltro(e.target.value as typeof statusFiltro)} aria-label="Filtrar por status">
+            <option value="todas">Todas</option>
+            <option value="em_aberto">Em aberto</option>
+            <option value="atrasada">Atrasadas</option>
+          </select>
+        </label>
+        <label className="dash-cob__select">
+          <span className="dash-visually-hidden">Ordenar</span>
+          <select value={ordenacao} onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)} aria-label="Ordenar lista">
+            <option value="nome-asc">Nome A-Z</option>
+            <option value="nome-desc">Nome Z-A</option>
+            <option value="venc-asc">Vencimento ↑</option>
+            <option value="venc-desc">Vencimento ↓</option>
+            <option value="valor-desc">Maior saldo</option>
+          </select>
+        </label>
       </div>
 
-      <div className="dash-section-header">
-        <p className="dash-muted">
-          {periodoAplicado?.de && periodoAplicado?.ate
-            ? `A mostrar cobranças com vencimento entre ${periodoAplicado.de} e ${periodoAplicado.ate}.`
-            : 'Sem filtro de período — a mostrar todas as cobranças.'}{' '}
-          {buscaMembro.trim()
-            ? `Pesquisa ativa por nome (“${buscaMembro.trim()}”).`
-            : null}{' '}
-          {mostrarPagas ? 'Exibindo pagas e pendentes.' : 'Exibindo apenas pendentes.'}
-        </p>
-        <div className="dash-section-actions" data-tour="cobrancas-acoes">
-          <button type="button" className="dash-btn-secondary" onClick={abrirCobrancaEmMassa}>
-            Cobrar todos os membros
-          </button>
-          <button type="button" className="dash-add-button" onClick={openNovo}>
-            Nova cobrança
-          </button>
-        </div>
+      <div className="dash-cob__kpis">
+        <article className="dash-cob__kpi dash-cob__kpi--recebido">
+          <h3>Recebido</h3>
+          <p className="dash-cob__kpi-valor">{formatBRL(kpis.recebido)}</p>
+        </article>
+        <article className="dash-cob__kpi dash-cob__kpi--aberto">
+          <h3>Em aberto</h3>
+          <p className="dash-cob__kpi-valor">{formatBRL(kpis.emAberto)}</p>
+        </article>
       </div>
 
       {loading ? (
         <p>Carregando…</p>
       ) : (
         <>
-          {selectedRows.length > 0 && (
-            <div className="dash-cob-bulk-bar">
-              <strong>✓ {selectedRows.length} cobrança(s) selecionada(s)</strong>
-              <div className="dash-form-actions">
-                <button type="button" className="dash-btn-success" onClick={() => setBulkActionOpen('pagar')}>
-                  💵 Pagar selecionadas
-                </button>
-                <button type="button" className="dash-btn-danger" onClick={() => setBulkActionOpen('excluir')}>
-                  🗑️ Excluir selecionadas
-                </button>
-              </div>
-            </div>
-          )}
-          <div data-tour="cobrancas-lista">
-            <CobrancasTable
-              rows={cobrancasPaginadas}
-              selectedIds={selectedIds}
-              onToggleSelect={toggleSelect}
-              onToggleSelectAllVisible={toggleSelectAllVisible}
-              onEdit={openEdit}
-              onDelete={setDeleteTarget}
-              onRefresh={reload}
-            />
-          </div>
-          <p className="dash-cob-subtotal" role="status">
-            <strong>Subtotal em aberto (filtros atuais):</strong> {formatBRL(subtotalAberto)}
-          </p>
+          <CobrancasTable
+            groups={gruposPaginados}
+            onEdit={openEdit}
+            onDelete={setDeleteTarget}
+            onRefresh={() => void reload({ silent: true })}
+          />
           <PaginationControls
-            totalItems={totalCobrancas}
+            totalItems={totalGrupos}
             currentPage={page}
             pageSize={pageSize}
             onPageChange={(p) => {
@@ -618,21 +830,26 @@ export function CobrancasScreen() {
       <CobrancaForm open={formOpen} initial={editing} onClose={() => setFormOpen(false)} onSave={salvar} />
 
       {bulkOpen && (
-        <div className="dash-modal-overlay" role="dialog" aria-modal="true" onClick={() => setBulkOpen(false)}>
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={onModalOverlayClick(() => setBulkOpen(false))}
+        >
           <div className="dash-modal dash-modal--narrow" onClick={(e) => e.stopPropagation()}>
             <h2>Cobrança em massa</h2>
-            <p className="dash-muted">Cria uma cobrança para cada membro da casa.</p>
+            <p className="dash-muted">Cria uma cobrança para cada membro da casa, com a categoria do fluxo de caixa.</p>
             <div className="dash-member-form">
               <label className="dash-field">
-                <span>Tipo</span>
-                <select
+                <span>Categoria do fluxo</span>
+                <SearchableSelect
+                  options={bulkCategoriaOptions}
                   value={bulkValues.tipo}
-                  onChange={(e) => setBulkValues((v) => ({ ...v, tipo: e.target.value as CobrancaFormValues['tipo'] }))}
-                >
-                  <option value="mensalidade">Mensalidade</option>
-                  <option value="obrigacao">Obrigação</option>
-                  <option value="outros">Outros</option>
-                </select>
+                  onChange={(v) => setBulkValues((prev) => ({ ...prev, tipo: v }))}
+                  searchPlaceholder="Buscar categoria…"
+                  placeholder={categoriaOptions.length ? 'Selecionar categoria…' : 'Carregando categorias…'}
+                  aria-label="Categoria do fluxo de caixa"
+                />
               </label>
               <label className="dash-field">
                 <span>Data vencimento</span>
@@ -641,11 +858,10 @@ export function CobrancasScreen() {
               <label className="dash-field">
                 <span>Valor</span>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  inputMode="decimal"
                   value={bulkValues.valor}
-                  onChange={(e) => setBulkValues((v) => ({ ...v, valor: e.target.value }))}
+                  onChange={(e) => setBulkValues((v) => ({ ...v, valor: sanitizeValorInput(e.target.value) }))}
+                  placeholder="R$ 0,00"
                 />
               </label>
               <label className="dash-field">
@@ -666,7 +882,12 @@ export function CobrancasScreen() {
       )}
 
       {deleteTarget && (
-        <div className="dash-modal-overlay" role="dialog" aria-modal="true">
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={onModalOverlayClick(() => setDeleteTarget(null))}
+        >
           <div className="dash-modal dash-modal--narrow">
             <h2>Excluir cobrança?</h2>
             <p>Esta ação não pode ser desfeita.</p>
@@ -683,7 +904,12 @@ export function CobrancasScreen() {
       )}
 
       {bulkActionOpen === 'pagar' && (
-        <div className="dash-modal-overlay" role="dialog" aria-modal="true" onClick={() => setBulkActionOpen(null)}>
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={onModalOverlayClick(() => setBulkActionOpen(null))}
+        >
           <div className="dash-modal dash-modal--narrow" onClick={(e) => e.stopPropagation()}>
             <h2>Pagar cobranças selecionadas</h2>
             <p className="dash-muted">Marcar {selectedRows.length} cobrança(s) como paga(s)?</p>
@@ -693,12 +919,17 @@ export function CobrancasScreen() {
                 <input type="date" value={bulkPagamentoData} onChange={(e) => setBulkPagamentoData(e.target.value)} />
               </label>
               <label className="dash-field">
-                <span>Forma de pagamento</span>
-                <select value={bulkPagamentoForma} onChange={(e) => setBulkPagamentoForma(e.target.value)}>
-                  <option value="PIX">PIX</option>
-                  <option value="Dinheiro">Dinheiro</option>
-                  <option value="Cartão">Cartão</option>
-                  <option value="Transferência">Transferência</option>
+                <span>Tipo de pagamento</span>
+                <select
+                  value={bulkPagamentoForma}
+                  onChange={(e) => setBulkPagamentoForma(e.target.value as FormaPagamento)}
+                  aria-label="Tipo de pagamento"
+                >
+                  {FORMAS_PAGAMENTO.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -715,7 +946,12 @@ export function CobrancasScreen() {
       )}
 
       {bulkActionOpen === 'excluir' && (
-        <div className="dash-modal-overlay" role="dialog" aria-modal="true" onClick={() => setBulkActionOpen(null)}>
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={onModalOverlayClick(() => setBulkActionOpen(null))}
+        >
           <div className="dash-modal dash-modal--narrow" onClick={(e) => e.stopPropagation()}>
             <h2>Excluir cobranças selecionadas?</h2>
             <p>Excluir {selectedRows.length} cobrança(s)? Esta ação pode ser desfeita pela restauração via banco.</p>
@@ -732,14 +968,19 @@ export function CobrancasScreen() {
       )}
 
       {reportOpen && (
-        <div className="dash-modal-overlay dash-modal-overlay--scrollable" role="dialog" aria-modal="true" onClick={() => setReportOpen(false)}>
+        <div
+          className="dash-modal-overlay dash-modal-overlay--scrollable"
+          role="dialog"
+          aria-modal="true"
+          onClick={onModalOverlayClick(() => setReportOpen(false))}
+        >
           <div
             ref={reportModalRef}
             className="dash-modal dash-modal--historico dash-modal--relatorio-pagos"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="dash-modal__head">
-              <h2>Relatório de Valores Pagos</h2>
+              <h2>Valores pagos — Fluxo de caixa</h2>
               <button type="button" className="dash-modal__close" aria-label="Fechar" onClick={() => setReportOpen(false)}>
                 ×
               </button>
@@ -755,24 +996,24 @@ export function CobrancasScreen() {
                   <input type="date" value={reportFiltro.ate} onChange={(e) => setReportFiltro((r) => ({ ...r, ate: e.target.value }))} />
                 </label>
                 <label className="dash-field">
-                  <span>Tipo</span>
-                  <select value={reportFiltro.tipo} onChange={(e) => setReportFiltro((r) => ({ ...r, tipo: e.target.value as CobrancaTipo | '' }))}>
-                    <option value="">Todos</option>
-                    <option value="mensalidade">Mensalidade</option>
-                    <option value="obrigacao">Obrigação</option>
-                    <option value="outros">Outros</option>
-                  </select>
+                  <span>Categoria</span>
+                  <SearchableSelect
+                    options={[{ value: '', label: 'Todas' }, ...categoriaOptions]}
+                    value={reportFiltro.tipo}
+                    onChange={(v) => setReportFiltro((r) => ({ ...r, tipo: v }))}
+                    searchPlaceholder="Buscar categoria…"
+                    aria-label="Categoria do fluxo"
+                  />
                 </label>
                 <label className="dash-field">
                   <span>Membro</span>
-                  <select value={reportFiltro.pessoaId} onChange={(e) => setReportFiltro((r) => ({ ...r, pessoaId: e.target.value }))}>
-                    <option value="">Todos</option>
-                    {pessoasRelatorio.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nome}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    options={pessoasRelatorioOptions}
+                    value={reportFiltro.pessoaId}
+                    onChange={(v) => setReportFiltro((r) => ({ ...r, pessoaId: v }))}
+                    searchPlaceholder="Buscar membro…"
+                    aria-label="Membro"
+                  />
                 </label>
                 <div className="dash-field dash-relatorio-filtros__action">
                   <span className="dash-relatorio-filtros__action-label" aria-hidden="true">
@@ -854,6 +1095,6 @@ export function CobrancasScreen() {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

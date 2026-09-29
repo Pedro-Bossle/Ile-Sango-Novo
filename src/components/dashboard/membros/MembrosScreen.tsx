@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchPessoasLista, deletePessoa, fetchReferenciasPerfilMembro } from '../../../services/membros';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchPessoasLista, deletePessoa, restorePessoa, fetchReferenciasPerfilMembro, labelOrixaCabeca } from '../../../services/membros';
 import {
   deleteCobranca,
   fetchCobrancasComMembros,
@@ -18,27 +18,44 @@ import { OrumaleSection } from './OrumaleSection';
 import { ExusSection } from './ExusSection';
 import { UmbandaSection } from './UmbandaSection';
 import { CobrancaForm, type CobrancaFormValues } from '../cobrancas/CobrancaForm';
+import './MembrosScreen.css';
 import { CobrancasReadOnlySummary } from './CobrancasReadOnlySummary';
-import type { PessoaListaItem } from '../../../services/membros';
+import type { PessoaListaItem, PessoasListaStatus } from '../../../services/membros';
 import { PerfilImpressao } from './PerfilImpressao';
 import { formatarTelefoneMascara, somenteDigitosTelefone } from '../../../utils/telefone';
+import { matchesSearchFields } from '../../../utils/searchFold';
 import { fetchHistoricoOrumale, type HistoricoOrumaleItem } from '../../../services/orumaleHistorico';
 import { gerarPdfPerfil } from '../../../services/gerarPdfPerfil';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
 import { carregarLogoBase64 } from '../../../utils/logoBase64';
 import { formatDateBR } from '../../../utils/formatDate';
 import { PaginationControls } from '../PaginationControls';
+import { downloadMembrosTemplate, importMembrosFromExcel } from '../../../services/membrosExcel';
+import { writeAuditLog } from '../../../services/auditLog';
 
 const BUSCA_MEMBROS_PLACEHOLDER = 'Pesquisar por nome, orisá de cabeça ou telefone';
 
 type View = 'list' | 'form';
-type SortKey = 'nome' | 'telefone' | 'orixa' | 'situacao';
+type SortKey = 'nome' | 'telefone' | 'orixa' | 'financeiro' | 'status';
 
 function defaultDirFor(key: SortKey): 'asc' | 'desc' {
-  if (key === 'situacao') return 'desc';
+  if (key === 'financeiro' || key === 'status') return 'desc';
   return 'asc';
 }
 
-export function MembrosScreen() {
+type Props = {
+  canExcel?: boolean;
+  canRestore?: boolean;
+  openPessoaId?: string | null;
+  onOpenConsumed?: () => void;
+};
+
+export function MembrosScreen({
+  canExcel = true,
+  canRestore = false,
+  openPessoaId = null,
+  onOpenConsumed,
+}: Props) {
   const [view, setView] = useState<View>('list');
   const [editId, setEditId] = useState<UUID | null>(null);
   const [lista, setLista] = useState<PessoaListaItem[]>([]);
@@ -49,6 +66,10 @@ export function MembrosScreen() {
   const [loadingLista, setLoadingLista] = useState(true);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<UUID | null>(null);
+  const [statusFiltro, setStatusFiltro] = useState<PessoasListaStatus>('ativos');
+  const [importing, setImporting] = useState(false);
+  const [excelMenuAberto, setExcelMenuAberto] = useState(false);
+  const excelMenuRef = useRef<HTMLDivElement | null>(null);
   const [busca, setBusca] = useState('');
   const [qualidadeNomeById, setQualidadeNomeById] = useState<Record<string, string>>({});
   const [sobrenomeNomeById, setSobrenomeNomeById] = useState<Record<string, string>>({});
@@ -58,18 +79,25 @@ export function MembrosScreen() {
   const [pageSize, setPageSize] = useState(() => Number(localStorage.getItem('membros_page_size') || '20'));
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' });
 
-  const reloadAll = useCallback(async () => {
-    setLoadingLista(true);
+  useEffect(() => {
+    if (view !== 'form') return;
+    document.body.setAttribute('data-ficha-membro', '1');
+    return () => document.body.removeAttribute('data-ficha-membro');
+  }, [view]);
+
+  const reloadAll = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoadingLista(true);
     try {
-      const [p, c] = await Promise.all([fetchPessoasLista(), fetchCobrancasComMembros()]);
+      const [p, c] = await Promise.all([fetchPessoasLista(statusFiltro), fetchCobrancasComMembros()]);
       setLista(p);
       setCobrancas(c);
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao carregar membros.', variant: 'error' });
     } finally {
-      setLoadingLista(false);
+      if (!silent) setLoadingLista(false);
     }
-  }, []);
+  }, [statusFiltro]);
 
   const salvarCobrancaPerfil = async (values: CobrancaFormValues) => {
     if (!cobrancaEditing) return;
@@ -89,19 +117,22 @@ export function MembrosScreen() {
       tipo: values.tipo,
     });
     setToast({ msg: 'Cobrança atualizada.', variant: 'success' });
-    await reloadAll();
+    await reloadAll({ silent: true });
     setCobrancaEditing(null);
   };
 
   const confirmDeleteCobranca = async () => {
     if (!cobrancaDelete) return;
+    const targetId = cobrancaDelete.id;
     try {
-      await deleteCobranca(cobrancaDelete.id);
+      setCobrancas((prev) => prev.filter((c) => String(c.id) !== String(targetId)));
       setCobrancaDelete(null);
+      await deleteCobranca(targetId);
       setToast({ msg: 'Cobrança excluída.', variant: 'success' });
-      await reloadAll();
+      await reloadAll({ silent: true });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao excluir.', variant: 'error' });
+      await reloadAll({ silent: true });
     }
   };
 
@@ -110,7 +141,7 @@ export function MembrosScreen() {
   }, [reloadAll]);
 
   const afterSave = useCallback(async () => {
-    await reloadAll();
+    await reloadAll({ silent: true });
     setView('list');
     setEditId(null);
     setToast({ msg: 'Membro salvo com sucesso', variant: 'success' });
@@ -124,13 +155,16 @@ export function MembrosScreen() {
   }, [cobrancas, editId]);
 
   const listaFiltrada = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     if (!q) return lista;
     const qDigitos = somenteDigitosTelefone(q);
     return lista.filter((m) => {
-      const base = `${m.nome} ${m.contato ?? ''} ${m.orixa_cabeca_nome ?? ''}`.toLowerCase();
+      const orixaLabel = labelOrixaCabeca(m.orixa_cabeca_nome, m.orixa_cabeca_qualidade_nome) ?? '';
       const contatoDigits = somenteDigitosTelefone(m.contato);
-      return base.includes(q) || (qDigitos.length > 0 && contatoDigits.includes(qDigitos));
+      return (
+        matchesSearchFields(q, m.nome, m.contato, orixaLabel) ||
+        (qDigitos.length > 0 && contatoDigits.includes(qDigitos))
+      );
     });
   }, [lista, busca]);
 
@@ -138,8 +172,10 @@ export function MembrosScreen() {
     const out = [...listaFiltrada];
     out.sort((a, b) => {
       const dirMul = sort.dir === 'asc' ? 1 : -1;
-      const statusA = pessoaEstaDevendo(a.id, cobrancas) ? 1 : 0;
-      const statusB = pessoaEstaDevendo(b.id, cobrancas) ? 1 : 0;
+      const finA = pessoaEstaDevendo(a.id, cobrancas) ? 1 : 0;
+      const finB = pessoaEstaDevendo(b.id, cobrancas) ? 1 : 0;
+      const stA = a.deleted_at ? 1 : 0;
+      const stB = b.deleted_at ? 1 : 0;
       switch (sort.key) {
         case 'nome':
           return dirMul * a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
@@ -150,10 +186,15 @@ export function MembrosScreen() {
               sensitivity: 'base',
             }))
           );
-        case 'orixa':
-          return dirMul * (a.orixa_cabeca_nome ?? '').localeCompare(b.orixa_cabeca_nome ?? '', 'pt-BR', { sensitivity: 'base' });
-        case 'situacao':
-          return dirMul * (statusA - statusB);
+        case 'orixa': {
+          const la = labelOrixaCabeca(a.orixa_cabeca_nome, a.orixa_cabeca_qualidade_nome) ?? '';
+          const lb = labelOrixaCabeca(b.orixa_cabeca_nome, b.orixa_cabeca_qualidade_nome) ?? '';
+          return dirMul * la.localeCompare(lb, 'pt-BR', { sensitivity: 'base' });
+        }
+        case 'financeiro':
+          return dirMul * (finA - finB);
+        case 'status':
+          return dirMul * (stA - stB);
         default:
           return 0;
       }
@@ -178,7 +219,7 @@ export function MembrosScreen() {
 
   useEffect(() => {
     setPage(1);
-  }, [busca, sort.key, sort.dir]);
+  }, [busca, sort.key, sort.dir, statusFiltro]);
 
   const onSort = (key: SortKey) => {
     setSort((s) => {
@@ -199,6 +240,13 @@ export function MembrosScreen() {
     setView('form');
   };
 
+  useEffect(() => {
+    if (!openPessoaId) return;
+    openEdit(openPessoaId as UUID);
+    onOpenConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só reage ao id externo
+  }, [openPessoaId]);
+
   const backToList = () => {
     setView('list');
     setEditId(null);
@@ -210,24 +258,96 @@ export function MembrosScreen() {
 
   const handleDelete = async (id: UUID) => {
     try {
+      const nome = lista.find((m) => String(m.id) === String(id))?.nome;
+      setLista((prev) => prev.filter((m) => String(m.id) !== String(id)));
       await deletePessoa(id);
+      await writeAuditLog({
+        action: 'delete',
+        entity: 'pessoas',
+        entity_id: id,
+        resumo: nome,
+        diff: {
+          tela: 'Membros',
+          changes: [{ campo: 'Situação', antigo: 'Ativo', novo: 'Inativado' }],
+        },
+      });
       if (String(editId) === String(id)) {
         backToList();
       } else {
         setDeleteConfirm(null);
       }
-      await reloadAll();
-      setToast({ msg: 'Membro excluído.', variant: 'success' });
+      await reloadAll({ silent: true });
+      setToast({ msg: 'Membro inativado.', variant: 'success' });
     } catch (e) {
-      setToast({ msg: e instanceof Error ? e.message : 'Não foi possível excluir.', variant: 'error' });
+      setToast({ msg: e instanceof Error ? e.message : 'Não foi possível inativar.', variant: 'error' });
+      await reloadAll({ silent: true });
     }
   };
 
+  const handleRestore = async (id: UUID) => {
+    try {
+      const nome = lista.find((m) => String(m.id) === String(id))?.nome;
+      await restorePessoa(id);
+      await writeAuditLog({
+        action: 'restore',
+        entity: 'pessoas',
+        entity_id: id,
+        resumo: nome,
+        diff: {
+          tela: 'Membros',
+          changes: [{ campo: 'Situação', antigo: 'Inativado', novo: 'Ativo' }],
+        },
+      });
+      await reloadAll({ silent: true });
+      setToast({ msg: 'Membro restaurado.', variant: 'success' });
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Não foi possível restaurar.', variant: 'error' });
+      await reloadAll({ silent: true });
+    }
+  };
+
+  const onImportExcel = async (file: File | null) => {
+    if (!file) return;
+    setImporting(true);
+    setExcelMenuAberto(false);
+    try {
+      const res = await importMembrosFromExcel(file);
+      await reloadAll({ silent: true });
+      setToast({
+        msg: `Importação: ${res.ok} ok, ${res.skipped} saltados.${res.errors.length ? ` Erros: ${res.errors.slice(0, 3).join('; ')}` : ''}`,
+        variant: res.errors.length && !res.ok ? 'error' : 'success',
+      });
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Falha na importação.', variant: 'error' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!excelMenuAberto) return;
+    const onDoc = (e: MouseEvent) => {
+      if (excelMenuRef.current && !excelMenuRef.current.contains(e.target as Node)) {
+        setExcelMenuAberto(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setExcelMenuAberto(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [excelMenuAberto]);
+
   const handlePessoaisChange = (
-    field: 'nome' | 'dataNascimento' | 'contato' | 'email' | 'signo' | 'obs',
+    field: 'nome' | 'dataEntrada' | 'dataNascimento' | 'contato' | 'email' | 'signo' | 'obs',
     value: string,
   ) => {
     if (field === 'nome') form.setNome(value);
+    if (field === 'dataEntrada') form.setDataEntrada(value);
     if (field === 'dataNascimento') form.setDataNascimento(value);
     if (field === 'contato') form.setContato(somenteDigitosTelefone(value));
     if (field === 'email') form.setEmail(value);
@@ -347,6 +467,7 @@ export function MembrosScreen() {
         gerarPdfPerfil({
           nome: form.nome || '—',
           nascimento: formatDateBR(form.dataNascimento),
+          entrada: formatDateBR(form.dataEntrada),
           signo: form.signo || '—',
           telefone: formatarTelefoneMascara(form.contato),
           email: form.email || '—',
@@ -402,7 +523,7 @@ export function MembrosScreen() {
     return (
       <>
         <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-        <div className="dash-split-main">
+        <div className="dash-split-main" data-ficha-membro="1">
           <div className="dash-split-main__bar">
             <button type="button" className="dash-btn-secondary" onClick={backToList}>
               ← Voltar à lista
@@ -419,7 +540,7 @@ export function MembrosScreen() {
                   {pdfLoading ? 'Gerando PDF…' : '🖨 Salvar PDF'}
                 </button>
                 <button type="button" className="dash-btn-danger-outline" onClick={() => setDeleteConfirm(editId)}>
-                  Excluir membro
+                  Inativar membro
                 </button>
               </div>
             )}
@@ -430,7 +551,8 @@ export function MembrosScreen() {
             <p>Carregando formulário…</p>
           ) : (
             <form
-              className="dash-member-form"
+              id="dash-membro-form"
+              className="dash-member-form dash-member-form--with-fab"
               onSubmit={(e) => {
                 e.preventDefault();
                 void form.submit();
@@ -438,6 +560,7 @@ export function MembrosScreen() {
             >
               <PessoaisSection
                 nome={form.nome}
+                dataEntrada={form.dataEntrada}
                 dataNascimento={form.dataNascimento}
                 contato={form.contato}
                 email={form.email}
@@ -458,12 +581,14 @@ export function MembrosScreen() {
                 addRow={form.addExu}
                 removeRow={form.removeExu}
                 updateRow={form.updateExu}
+                reorderRows={form.reorderExus}
               />
               <UmbandaSection
                 rows={form.umbanda}
                 addRow={form.addUmbanda}
                 removeRow={form.removeUmbanda}
                 updateRow={form.updateUmbanda}
+                reorderRows={form.reorderUmbanda}
               />
               {editId && (
                 <CobrancasReadOnlySummary
@@ -475,20 +600,21 @@ export function MembrosScreen() {
                   onDelete={setCobrancaDelete}
                 />
               )}
-              <div className="dash-form-actions">
-                <button type="button" className="dash-btn-secondary" onClick={backToList}>
-                  Cancelar
-                </button>
-                <button type="submit" className="dash-btn-primary" disabled={form.saving}>
-                  {form.saving ? 'Salvando…' : 'Salvar membro'}
-                </button>
-              </div>
             </form>
           )}
+        </div>
+        <div className="dash-membro-fab no-print">
+          <button type="button" className="dash-btn-secondary" onClick={backToList}>
+            Voltar
+          </button>
+          <button type="submit" form="dash-membro-form" className="dash-btn-primary" disabled={form.saving || form.loadingMeta || form.loadingPessoa}>
+            {form.saving ? 'Salvando…' : 'Salvar'}
+          </button>
         </div>
         <PerfilImpressao
           nome={form.nome}
           dataNascimento={form.dataNascimento}
+          dataEntrada={form.dataEntrada}
           contatoFormatado={formatarTelefoneMascara(form.contato)}
           email={form.email}
           signo={form.signo}
@@ -514,7 +640,12 @@ export function MembrosScreen() {
         />
 
         {cobrancaDelete && (
-          <div className="dash-modal-overlay" role="dialog" aria-modal="true">
+          <div
+            className="dash-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onClick={onModalOverlayClick(() => setCobrancaDelete(null))}
+          >
             <div className="dash-modal dash-modal--narrow">
               <h2>Excluir cobrança?</h2>
               <p>Esta ação não pode ser desfeita.</p>
@@ -531,16 +662,21 @@ export function MembrosScreen() {
         )}
 
         {deleteConfirm && (
-          <div className="dash-modal-overlay" role="dialog" aria-modal="true">
+          <div
+            className="dash-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onClick={onModalOverlayClick(() => setDeleteConfirm(null))}
+          >
             <div className="dash-modal dash-modal--narrow">
-              <h2>Excluir membro?</h2>
-              <p>Esta ação não pode ser desfeita.</p>
+              <h2>Inativar membro?</h2>
+              <p>O membro sai da lista ativa. Use o filtro Status → Inativos para restaurar.</p>
               <div className="dash-form-actions">
                 <button type="button" className="dash-btn-secondary" onClick={() => setDeleteConfirm(null)}>
                   Cancelar
                 </button>
                 <button type="button" className="dash-btn-danger" onClick={() => void handleDelete(deleteConfirm)}>
-                  Excluir
+                  Inativar
                 </button>
               </div>
             </div>
@@ -553,28 +689,81 @@ export function MembrosScreen() {
   return (
     <>
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-      <h1>Membros</h1>
-      <div className="dash-section-header" data-tour="membros-filtros">
-        <div className="dash-filtros">
-          <input
-            placeholder={BUSCA_MEMBROS_PLACEHOLDER}
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            aria-label={BUSCA_MEMBROS_PLACEHOLDER}
-          />
+      <header className="dash-page-head dash-membros-head">
+        <div className="dash-page-head__titles">
+          <h1>Membros</h1>
+          <p className="dash-muted">Cadastro e ficha dos membros do Ilê.</p>
         </div>
-        <button type="button" className="dash-add-button" data-tour="membros-adicionar" onClick={openCreate}>
-          Adicionar membro
-        </button>
-      </div>
+        <div className="dash-page-head__actions">
+          {canExcel && (
+            <div className="dash-excel-menu" ref={excelMenuRef}>
+              <button
+                type="button"
+                className="dash-add-button dash-add-button--secondary"
+                data-tour="membros-excel-menu"
+                aria-expanded={excelMenuAberto}
+                aria-haspopup="menu"
+                disabled={importing}
+                onClick={() => setExcelMenuAberto((v) => !v)}
+              >
+                {importing ? 'A importar…' : 'Excel ▾'}
+              </button>
+              {excelMenuAberto && (
+                <div className="dash-excel-menu__panel" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    data-tour="membros-excel-modelo"
+                    onClick={() => {
+                      downloadMembrosTemplate();
+                      setExcelMenuAberto(false);
+                    }}
+                  >
+                    Baixar modelo
+                  </button>
+                  <label className="dash-excel-menu__import" role="menuitem" data-tour="membros-excel-import">
+                    Importar Excel
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      hidden
+                      disabled={importing}
+                      onChange={(e) => {
+                        void onImportExcel(e.target.files?.[0] ?? null);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+          <button type="button" className="dash-add-button" data-tour="membros-adicionar" onClick={openCreate}>
+            Adicionar membro
+          </button>
+        </div>
+      </header>
 
-      <div className="dash-filtros-mobile" data-tour="membros-filtros-mobile">
+      <div className="dash-membros-toolbar" data-tour="membros-filtros">
         <input
+          className="dash-membros-toolbar__busca"
           placeholder={BUSCA_MEMBROS_PLACEHOLDER}
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           aria-label={BUSCA_MEMBROS_PLACEHOLDER}
         />
+        <label className="dash-membros-status-filtro">
+          <span className="dash-visually-hidden">Status</span>
+          <select
+            value={statusFiltro}
+            onChange={(e) => setStatusFiltro(e.target.value as PessoasListaStatus)}
+            aria-label="Filtrar por status"
+          >
+            <option value="ativos">Ativos</option>
+            {canRestore && <option value="inativos">Inativos</option>}
+            {canRestore && <option value="todos">Todos</option>}
+          </select>
+        </label>
       </div>
 
       {loadingLista ? (
@@ -589,7 +778,7 @@ export function MembrosScreen() {
                     <button type="button" className="dash-th-sort" onClick={() => onSort('nome')} title="Ordenar por membro">
                       <span>Membro</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'nome' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'nome' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
@@ -597,7 +786,7 @@ export function MembrosScreen() {
                     <button type="button" className="dash-th-sort" onClick={() => onSort('telefone')} title="Ordenar por telefone">
                       <span>Telefone</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'telefone' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'telefone' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
@@ -605,15 +794,23 @@ export function MembrosScreen() {
                     <button type="button" className="dash-th-sort" onClick={() => onSort('orixa')} title="Ordenar por orisá de cabeça">
                       <span>Orisá cabeça</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'orixa' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'orixa' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
-                  <th scope="col" aria-sort={sort.key === 'situacao' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                    <button type="button" className="dash-th-sort" onClick={() => onSort('situacao')} title="Ordenar por situação">
-                      <span>Situação</span>
+                  <th scope="col" aria-sort={sort.key === 'financeiro' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('financeiro')} title="Ordenar por financeiro">
+                      <span>Financeiro</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'situacao' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'financeiro' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={sort.key === 'status' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('status')} title="Ordenar por status">
+                      <span>Status</span>
+                      <span className="dash-th-sort__icons" aria-hidden>
+                        {sort.key === 'status' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
@@ -622,28 +819,55 @@ export function MembrosScreen() {
               <tbody>
                 {membrosPaginados.map((m) => {
                   const devendo = pessoaEstaDevendo(m.id, cobrancas);
+                  const inativo = Boolean(m.deleted_at);
+                  const orixaLabel = labelOrixaCabeca(m.orixa_cabeca_nome, m.orixa_cabeca_qualidade_nome);
                   return (
                     <tr
                       key={m.id}
                       className="dash-row-clickable"
                       role="button"
                       tabIndex={0}
-                      onClick={() => openEdit(m.id)}
+                      onClick={() => {
+                        if (inativo) return;
+                        openEdit(m.id);
+                      }}
                       onKeyDown={(e) => {
+                        if (inativo) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           openEdit(m.id);
                         }
                       }}
-                      aria-label={`Abrir perfil de ${m.nome}`}
+                      aria-label={inativo ? `${m.nome} (inativo)` : `Abrir perfil de ${m.nome}`}
                     >
                       <td>{m.nome}</td>
                       <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
-                      <td>{m.orixa_cabeca_nome || '—'}</td>
+                      <td>{orixaLabel || '—'}</td>
                       <td>
                         <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
                           {devendo ? 'Devendo' : 'Em dia'}
                         </span>
+                      </td>
+                      <td>
+                        {inativo ? (
+                          <span className="dash-membros-status-cell">
+                            <span className="dash-badge dash-badge--inativo">Inativo</span>
+                            {canRestore && (
+                              <button
+                                type="button"
+                                className="dash-btn-secondary dash-btn-min"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleRestore(m.id);
+                                }}
+                              >
+                                Restaurar
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="dash-badge dash-badge--ativo">Ativo</span>
+                        )}
                       </td>
                     </tr>
                   );

@@ -1,0 +1,60 @@
+.cadastro-publico {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.cadastro-publico__head {
+  margin-bottom: 1.5rem;
+}
+
+.cadastro-publico__head h1 {
+  margin: 0 0 0.35rem;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  color: #4a1c1c;
+}
+
+.cadastro-publico__head p,
+.cadastro-publico__msg {
+  margin: 0;
+  color: #5c524a;
+  line-height: 1.5;
+}
+
+.cadastro-publico__hint {
+  margin: 0 0 1rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: #f7f3ef;
+  font-size: 0.9rem;
+}
+
+.cadastro-publico__form {
+  background: #fff;
+  border: 1px solid #e8e0d8;
+  border-radius: 12px;
+  padding: 1.25rem 1.1rem 1.5rem;
+}
+
+.cadastro-publico__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ece6e0;
+}
+
+@media (max-width: 640px) {
+  .cadastro-publico {
+    padding: 1.25rem 0.85rem 3rem;
+  }
+
+  .cadastro-publico__actions {
+    flex-direction: column;
+  }
+
+  .cadastro-publico__actions .dash-btn-primary {
+    width: 100%;
+  }
+}

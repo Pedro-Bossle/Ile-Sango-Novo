@@ -17,7 +17,10 @@ import {
   updateDigina,
   type DiginaOrisaRow,
 } from '../../../services/sobrenomesOrisa';
+import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { Toast } from '../Toast';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
+import { matchesSearch, matchesSearchFields } from '../../../utils/searchFold';
 
 type Aba = 'orixas' | 'qualidades' | 'diginas';
 
@@ -156,15 +159,15 @@ export function OrixasConfigScreen() {
     return map;
   }, [qualidades]);
 
-  const termo = busca.trim().toLowerCase();
+  const termo = busca.trim();
 
   const orixasFiltrados = useMemo(
-    () => orixas.filter((o) => o.nome.toLowerCase().includes(termo)),
+    () => orixas.filter((o) => matchesSearch(o.nome, termo)),
     [orixas, termo],
   );
 
   const qualidadesFiltradas = useMemo(
-    () => qualidades.filter((q) => q.nome.toLowerCase().includes(termo)),
+    () => qualidades.filter((q) => matchesSearch(q.nome, termo)),
     [qualidades, termo],
   );
 
@@ -173,7 +176,7 @@ export function OrixasConfigScreen() {
       diginas.filter((d) => {
         const oNome = orixaNomeById.get(String(d.orixa_id ?? filtroOrixaId)) ?? '';
         const qNome = d.qualidade_id != null ? qualidadeNomeById.get(String(d.qualidade_id)) ?? '' : '';
-        return `${d.nome} ${oNome} ${qNome}`.toLowerCase().includes(termo);
+        return matchesSearchFields(termo, d.nome, oNome, qNome);
       }),
     [diginas, filtroOrixaId, orixaNomeById, qualidadeNomeById, termo],
   );
@@ -290,11 +293,29 @@ export function OrixasConfigScreen() {
     return qualidade ? `${orixa} · ${qualidade}` : orixa;
   };
 
+  const orixaSelectOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: 'Selecione…' },
+      ...orixas.map((o) => ({ value: String(o.id), label: o.nome })),
+    ],
+    [orixas],
+  );
+
+  const qualidadeSelectOptions = useMemo(
+    (): SearchableSelectOption[] => [
+      { value: '', label: 'Sem qualidade' },
+      ...qualidades.map((q) => ({ value: String(q.id), label: q.nome })),
+    ],
+    [qualidades],
+  );
+
   return (
     <div className="dash-orixa-config">
-      <header className="dash-orixa-config__header">
-        <h1>Orixás</h1>
-        <p className="dash-muted">Configure orixás, qualidades e diginas cadastrados no sistema.</p>
+      <header className="dash-page-head dash-orixa-config__header">
+        <div className="dash-page-head__titles">
+          <h1>Orixás</h1>
+          <p className="dash-muted">Configure orixás, qualidades e diginas cadastrados no sistema.</p>
+        </div>
       </header>
 
       <div className="dash-orixa-config__tabs" role="tablist" aria-label="Seções de configuração" data-tour="orixas-abas">
@@ -325,20 +346,16 @@ export function OrixasConfigScreen() {
         {aba !== 'orixas' && (
           <label className="dash-field dash-orixa-config__filtro">
             <span>Orixá</span>
-            <select
+            <SearchableSelect
+              options={orixaSelectOptions}
               value={filtroOrixaId}
-              onChange={(e) => {
-                setFiltroOrixaId(e.target.value);
+              onChange={(v) => {
+                setFiltroOrixaId(v);
                 setBusca('');
               }}
-            >
-              <option value="">Selecione…</option>
-              {orixas.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.nome}
-                </option>
-              ))}
-            </select>
+              searchPlaceholder="Buscar orixá…"
+              aria-label="Orixá"
+            />
           </label>
         )}
         <label className="dash-field dash-orixa-config__busca">
@@ -420,7 +437,7 @@ export function OrixasConfigScreen() {
       )}
 
       {modal && (
-        <div className="dash-modal-overlay">
+        <div className="dash-modal-overlay" onClick={onModalOverlayClick(() => setModal(null))}>
           <div className="dash-modal dash-modal--narrow" role="dialog" aria-modal="true">
             <div className="dash-modal__head">
               <h2>
@@ -436,39 +453,30 @@ export function OrixasConfigScreen() {
               {(modal.kind === 'qualidade' || modal.kind === 'digina') && (
                 <label className="dash-field">
                   <span>Orixá</span>
-                  <select
+                  <SearchableSelect
+                    options={orixaSelectOptions}
                     value={modal.orixaId}
-                    onChange={(e) => {
-                      const orixaId = e.target.value;
+                    onChange={(orixaId) => {
                       if (modal.kind === 'qualidade') setModal({ ...modal, orixaId });
                       else setModal({ ...modal, orixaId, qualidadeId: '' });
                       void carregarQualidades(orixaId);
                     }}
                     required
-                  >
-                    <option value="">Selecione…</option>
-                    {orixas.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.nome}
-                      </option>
-                    ))}
-                  </select>
+                    searchPlaceholder="Buscar orixá…"
+                    aria-label="Orixá"
+                  />
                 </label>
               )}
               {modal.kind === 'digina' && (
                 <label className="dash-field">
                   <span>Qualidade (opcional)</span>
-                  <select
+                  <SearchableSelect
+                    options={qualidadeSelectOptions}
                     value={modal.qualidadeId}
-                    onChange={(e) => setModal({ ...modal, qualidadeId: e.target.value })}
-                  >
-                    <option value="">Sem qualidade</option>
-                    {qualidades.map((q) => (
-                      <option key={String(q.id)} value={String(q.id)}>
-                        {q.nome}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(qualidadeId) => setModal({ ...modal, qualidadeId })}
+                    searchPlaceholder="Buscar qualidade…"
+                    aria-label="Qualidade"
+                  />
                 </label>
               )}
               <label className="dash-field">
@@ -494,7 +502,10 @@ export function OrixasConfigScreen() {
       )}
 
       {deleteConfirm && (
-        <div className="dash-modal-overlay">
+        <div
+          className="dash-modal-overlay"
+          onClick={onModalOverlayClick(() => !saving && setDeleteConfirm(null))}
+        >
           <div className="dash-modal dash-modal--narrow" role="dialog" aria-modal="true">
             <div className="dash-modal__head">
               <h2>Confirmar exclusão</h2>

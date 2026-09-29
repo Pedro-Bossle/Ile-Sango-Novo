@@ -1,30 +1,36 @@
 import { supabase } from '../lib/supabaseClient';
 import { somenteDigitosTelefone } from '../utils/telefone';
+import { ensureClienteParaPessoa } from './atendimento';
 
 import type { CadastroOrixas, Exu, Orumale, Orixa, Pessoa, Umbanda, UUID } from '../types/database';
 
 
 
 export type PessoaListaItem = Pessoa & {
-
   orixa_cabeca_nome: string | null;
-
+  orixa_cabeca_qualidade_nome: string | null;
 };
 
+/** Nome do orisá de cabeça com qualidade ao lado (ex.: "Xangô Aganju"). */
+export function labelOrixaCabeca(
+  orixaNome: string | null | undefined,
+  qualidadeNome: string | null | undefined,
+): string | null {
+  const o = (orixaNome ?? '').trim();
+  const q = (qualidadeNome ?? '').trim();
+  if (!o && !q) return null;
+  if (o && q) return `${o} ${q}`;
+  return o || q;
+}
 
+export type PessoasListaStatus = 'ativos' | 'inativos' | 'todos';
 
 export type PessoaCompleta = {
-
   pessoa: Pessoa;
-
   cadastro: CadastroOrixas | null;
-
   orumale: Orumale[];
-
   exus: Exu[];
-
   umbanda: Umbanda[];
-
 };
 
 
@@ -120,85 +126,129 @@ export type MemberFormPayload = {
 
 
 async function mapOrixaNomes(ids: (string | null)[]): Promise<Map<string, string>> {
-
   const clean = [...new Set(ids.filter(Boolean))] as string[];
-
   if (clean.length === 0) return new Map();
-
   const { data, error } = await supabase.from('orixas').select('id, nome').in('id', clean);
-
   if (error) throw new Error(error.message);
-
   return new Map((data as Orixa[]).map((o) => [o.id, o.nome]));
-
 }
 
+async function mapQualidadeNomes(ids: Array<string | number | null | undefined>): Promise<Map<string, string>> {
+  const nums = [
+    ...new Set(
+      ids
+        .map((id) => Number(String(id ?? '').trim()))
+        .filter((n) => !Number.isNaN(n)),
+    ),
+  ];
+  if (nums.length === 0) return new Map();
+  const { data, error } = await supabase.from('qualidades').select('id, nome').in('id', nums);
+  if (error) throw new Error(error.message);
+  const out = new Map<string, string>();
+  for (const row of (data ?? []) as Array<{ id: string | number; nome: string }>) {
+    out.set(String(row.id), row.nome);
+  }
+  return out;
+}
 
+export type OrixaCabecaRef = {
+  orixa_cabeca_nome: string | null;
+  orixa_cabeca_qualidade_nome: string | null;
+};
 
-export async function fetchPessoasLista(): Promise<PessoaListaItem[]> {
+/** Mapa pessoa_id → orixá/qualidade de cabeça (para saudação de mensagens). */
+export async function fetchMapaOrixaCabeca(pessoaIds: string[]): Promise<Map<string, OrixaCabecaRef>> {
+  const ids = [...new Set(pessoaIds.map((id) => String(id || '').trim()).filter(Boolean))];
+  const out = new Map<string, OrixaCabecaRef>();
+  if (ids.length === 0) return out;
 
-  const { data: pessoas, error: e1 } = await supabase
+  const { data: cadastros, error } = await supabase
+    .from('cadastro_orixas')
+    .select('pessoa_id, orixa_cabeca_id, qualidade_cabeca_id')
+    .in('pessoa_id', ids);
+  if (error) throw new Error(error.message);
 
+  type CadCabeca = {
+    pessoa_id: string;
+    orixa_cabeca_id?: string | null;
+    qualidade_cabeca_id?: string | number | null;
+  };
+
+  const rows = (cadastros ?? []) as CadCabeca[];
+  const [nomeMap, qualidadeMap] = await Promise.all([
+    mapOrixaNomes(rows.map((c) => c.orixa_cabeca_id ?? null)),
+    mapQualidadeNomes(rows.map((c) => c.qualidade_cabeca_id ?? null)),
+  ]);
+
+  for (const id of ids) {
+    out.set(id, { orixa_cabeca_nome: null, orixa_cabeca_qualidade_nome: null });
+  }
+  for (const c of rows) {
+    const oid = c.orixa_cabeca_id ?? null;
+    const qid = c.qualidade_cabeca_id != null ? String(c.qualidade_cabeca_id) : null;
+    out.set(c.pessoa_id, {
+      orixa_cabeca_nome: oid ? nomeMap.get(oid) ?? null : null,
+      orixa_cabeca_qualidade_nome: qid ? qualidadeMap.get(qid) ?? null : null,
+    });
+  }
+  return out;
+}
+
+export async function fetchPessoasLista(status: PessoasListaStatus | boolean = 'ativos'): Promise<PessoaListaItem[]> {
+  // Compat: boolean antigo (true = só inativos, false = só ativos)
+  const filtro: PessoasListaStatus =
+    typeof status === 'boolean' ? (status ? 'inativos' : 'ativos') : status;
+
+  let q = supabase
     .from('pessoas')
-
-    .select('id, nome, data_nascimento, contato, email, signo, obs')
-
+    .select('id, nome, data_nascimento, data_entrada, contato, email, signo, obs, deleted_at')
     .order('nome', { ascending: true });
 
+  if (filtro === 'inativos') q = q.not('deleted_at', 'is', null);
+  else if (filtro === 'ativos') q = q.is('deleted_at', null);
+
+  const { data: pessoas, error: e1 } = await q;
   if (e1) throw new Error(e1.message);
 
   const list = (pessoas ?? []) as Pessoa[];
-
   if (list.length === 0) return [];
 
-
-
   const ids = list.map((p) => p.id);
-
   const { data: cadastros, error: e2 } = await supabase
-
     .from('cadastro_orixas')
-
     .select(
-
       'pessoa_id, orixa_cabeca_id, qualidade_cabeca_id, orixa_corpo_id, qualidade_corpo_id, orixa_passagem_id, qualidade_passagem_id, orixa_saida_id, qualidade_saida_id',
-
     )
-
     .in('pessoa_id', ids);
 
   if (e2) throw new Error(e2.message);
 
-  const cabecaIds = (cadastros ?? []).map((c: { orixa_cabeca_id?: string | null }) => c.orixa_cabeca_id ?? null);
+  type CadCabeca = {
+    pessoa_id: string;
+    orixa_cabeca_id?: string | null;
+    qualidade_cabeca_id?: string | number | null;
+  };
 
-  const nomeMap = await mapOrixaNomes(cabecaIds);
+  const cabecaIds = (cadastros ?? []).map((c) => (c as CadCabeca).orixa_cabeca_id ?? null);
+  const qualidadeIds = (cadastros ?? []).map((c) => (c as CadCabeca).qualidade_cabeca_id ?? null);
+  const [nomeMap, qualidadeMap] = await Promise.all([mapOrixaNomes(cabecaIds), mapQualidadeNomes(qualidadeIds)]);
 
-  const cadByPessoa = new Map<string, { orixa_cabeca_id?: string | null }>();
-
+  const cadByPessoa = new Map<string, CadCabeca>();
   for (const c of cadastros ?? []) {
-
-    const row = c as { pessoa_id: string; orixa_cabeca_id?: string | null };
-
+    const row = c as CadCabeca;
     cadByPessoa.set(row.pessoa_id, row);
-
   }
 
   return list.map((p) => {
-
     const co = cadByPessoa.get(p.id);
-
     const oid = co?.orixa_cabeca_id ?? null;
-
+    const qid = co?.qualidade_cabeca_id != null ? String(co.qualidade_cabeca_id) : null;
     return {
-
       ...p,
-
       orixa_cabeca_nome: oid ? nomeMap.get(oid) ?? null : null,
-
+      orixa_cabeca_qualidade_nome: qid ? qualidadeMap.get(qid) ?? null : null,
     };
-
   });
-
 }
 
 
@@ -219,7 +269,7 @@ export async function fetchPessoaCompleta(id: UUID): Promise<PessoaCompleta> {
 
   ] = await Promise.all([
 
-    supabase.from('pessoas').select('id, nome, data_nascimento, contato, email, signo, obs').eq('id', id).maybeSingle(),
+    supabase.from('pessoas').select('id, nome, data_nascimento, data_entrada, contato, email, signo, obs').eq('id', id).maybeSingle(),
 
     supabase.from('cadastro_orixas').select('*').eq('pessoa_id', id).maybeSingle(),
 
@@ -295,6 +345,8 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
     nome: nullIfEmpty(pessoa.nome) ?? '',
 
     data_nascimento: nullIfEmpty(pessoa.data_nascimento),
+
+    data_entrada: nullIfEmpty(pessoa.data_entrada),
 
     contato: nullIfEmpty(pessoa.contato),
 
@@ -555,7 +607,15 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
 
   }
 
-
+  await ensureClienteParaPessoa({
+    id: pessoaId,
+    nome: String(pessoaRow.nome ?? ''),
+    data_nascimento: (pessoaRow.data_nascimento as string | null) ?? null,
+    contato: (pessoaRow.contato as string | null) ?? null,
+    email: (pessoaRow.email as string | null) ?? null,
+    obs: (pessoaRow.obs as string | null) ?? null,
+    deleted_at: null,
+  });
 
   return pessoaId;
 
@@ -564,11 +624,46 @@ export async function savePessoaCompleta(payload: MemberFormPayload): Promise<UU
 
 
 export async function deletePessoa(id: UUID): Promise<void> {
-
-  const { error } = await supabase.from('pessoas').delete().eq('id', id);
-
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
+    .from('pessoas')
+    .update({ deleted_at: now })
+    .eq('id', id)
+    .select('id, nome, data_nascimento, contato, email, obs, deleted_at')
+    .single();
   if (error) throw new Error(error.message);
+  if (data) {
+    await ensureClienteParaPessoa({
+      id: data.id,
+      nome: data.nome,
+      data_nascimento: data.data_nascimento,
+      contato: data.contato,
+      email: data.email,
+      obs: data.obs,
+      deleted_at: data.deleted_at ?? now,
+    });
+  }
+}
 
+export async function restorePessoa(id: UUID): Promise<void> {
+  const { data, error } = await supabase
+    .from('pessoas')
+    .update({ deleted_at: null })
+    .eq('id', id)
+    .select('id, nome, data_nascimento, contato, email, obs, deleted_at')
+    .single();
+  if (error) throw new Error(error.message);
+  if (data) {
+    await ensureClienteParaPessoa({
+      id: data.id,
+      nome: data.nome,
+      data_nascimento: data.data_nascimento,
+      contato: data.contato,
+      email: data.email,
+      obs: data.obs,
+      deleted_at: null,
+    });
+  }
 }
 
 type NomePorId = Record<string, string>;

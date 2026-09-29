@@ -1,83 +1,53 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CobrancaComMembro } from '../../../services/cobrancas';
-import { isMensalidadeTipo, valorSaldoCobranca, valorTotalCobranca } from '../../../services/cobrancas';
-import { CobrancaRow } from './CobrancaRow';
+import {
+  isCobrancaPendente,
+  valorPagoCobranca,
+  valorSaldoCobranca,
+  valorTotalCobranca,
+} from '../../../services/cobrancas';
+import { CobrancaMembroCard, groupCobrancasPorMembro, type CobrancaMembroGrupo } from './CobrancaMembroCard';
+
+export type CobrancasSortKey = 'nome-asc' | 'nome-desc' | 'vencimento' | 'valor';
+export type CobrancasStatusFiltro = 'todas' | 'abertas' | 'atrasadas' | 'pagas';
 
 type Props = {
-  rows: CobrancaComMembro[];
-  selectedIds: Set<string>;
-  onToggleSelect: (id: string | number, checked: boolean) => void;
-  onToggleSelectAllVisible: (ids: Array<string | number>, checked: boolean) => void;
+  /** Grupos já paginados — preferencial. */
+  groups?: CobrancaMembroGrupo[];
+  /** Fallback: lista plana (agrupa internamente). */
+  rows?: CobrancaComMembro[];
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
 };
 
-type SortKey = 'criacao' | 'vencimento' | 'membro' | 'tipo' | 'valores' | 'descricao';
-
-/** Primeira ordenação ao mudar de coluna: datas/valores com “mais relevante” primeiro. */
-function defaultDirFor(key: SortKey): 'asc' | 'desc' {
-  if (key === 'criacao' || key === 'valores') return 'desc';
-  return 'asc';
+function hojeIso() {
+  return new Date().toISOString().slice(0, 10);
 }
 
-function labelTipoOrdenacao(t: string | null | undefined): string {
-  if (t === 'mensalidade') return 'Mensalidade';
-  if (t === 'obrigacao') return 'Obrigação';
-  if (t === 'outros') return 'Outros';
-  return (t ?? '').trim() || '—';
+export function isCobrancaAtrasada(c: CobrancaComMembro): boolean {
+  if (!isCobrancaPendente(c)) return false;
+  const venc = (c.vencimento ?? '').slice(0, 10);
+  return Boolean(venc && venc < hojeIso());
 }
 
-function parseTimeIso(iso: string | null | undefined): number | null {
-  if (!iso) return null;
-  const t = new Date(iso).getTime();
-  return Number.isNaN(t) ? null : t;
-}
-
-function parseDia(data: string | null | undefined): number | null {
-  if (!data) return null;
-  const t = new Date(data).getTime();
-  return Number.isNaN(t) ? null : t;
-}
-
-function valorTabelaCobranca(c: CobrancaComMembro): number {
-  return isMensalidadeTipo(c) ? valorSaldoCobranca(c) : valorTotalCobranca(c);
-}
-
-function sortCobrancas(list: CobrancaComMembro[], key: SortKey, dir: 'asc' | 'desc'): CobrancaComMembro[] {
+export function sortCobrancasList(list: CobrancaComMembro[], key: CobrancasSortKey): CobrancaComMembro[] {
   const out = [...list];
-  const cmpNumNullLast = (a: number | null, b: number | null): number => {
-    if (a === null && b === null) return 0;
-    if (a === null) return 1;
-    if (b === null) return -1;
-    const d = a - b;
-    return dir === 'asc' ? d : -d;
-  };
-
   out.sort((a, b) => {
     switch (key) {
-      case 'criacao':
-        return cmpNumNullLast(parseTimeIso(a.created_at), parseTimeIso(b.created_at));
-      case 'vencimento':
-        return cmpNumNullLast(parseDia(a.vencimento), parseDia(b.vencimento));
-      case 'membro': {
-        const cmp = (a.membro_nome ?? '').localeCompare(b.membro_nome ?? '', 'pt-BR', { sensitivity: 'base' });
-        return dir === 'asc' ? cmp : -cmp;
+      case 'nome-asc':
+        return (a.membro_nome ?? '').localeCompare(b.membro_nome ?? '', 'pt-BR', { sensitivity: 'base' });
+      case 'nome-desc':
+        return (b.membro_nome ?? '').localeCompare(a.membro_nome ?? '', 'pt-BR', { sensitivity: 'base' });
+      case 'vencimento': {
+        const va = a.vencimento ?? '';
+        const vb = b.vencimento ?? '';
+        if (!va && !vb) return 0;
+        if (!va) return 1;
+        if (!vb) return -1;
+        return va.localeCompare(vb);
       }
-      case 'tipo': {
-        const cmp = labelTipoOrdenacao(a.tipo).localeCompare(labelTipoOrdenacao(b.tipo), 'pt-BR', {
-          sensitivity: 'base',
-        });
-        return dir === 'asc' ? cmp : -cmp;
-      }
-      case 'valores': {
-        const d = valorTabelaCobranca(a) - valorTabelaCobranca(b);
-        return dir === 'asc' ? d : -d;
-      }
-      case 'descricao': {
-        const cmp = (a.descricao ?? '').localeCompare(b.descricao ?? '', 'pt-BR', { sensitivity: 'base' });
-        return dir === 'asc' ? cmp : -cmp;
-      }
+      case 'valor':
+        return valorTotalCobranca(b) - valorTotalCobranca(a);
       default:
         return 0;
     }
@@ -85,151 +55,34 @@ function sortCobrancas(list: CobrancaComMembro[], key: SortKey, dir: 'asc' | 'de
   return out;
 }
 
-type SortHeaderProps = {
-  label: string;
-  sortKey: SortKey;
-  activeKey: SortKey;
-  dir: 'asc' | 'desc';
-  onSort: (key: SortKey) => void;
-  title: string;
-};
-
-function SortTh({ label, sortKey, activeKey, dir, onSort, title }: SortHeaderProps) {
-  const active = activeKey === sortKey;
-  const ariaSort = active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none';
-  return (
-    <th scope="col" aria-sort={ariaSort}>
-      <button type="button" className="dash-th-sort" onClick={() => onSort(sortKey)} title={title}>
-        <span>{label}</span>
-        <span className="dash-th-sort__icons" aria-hidden>
-          {active ? (dir === 'asc' ? '▲' : '▼') : '⇅'}
-        </span>
-      </button>
-    </th>
-  );
+export function totalRecebidoLista(rows: CobrancaComMembro[]) {
+  return rows.reduce((a, c) => a + valorPagoCobranca(c), 0);
 }
 
-export function CobrancasTable({
-  rows,
-  selectedIds,
-  onToggleSelect,
-  onToggleSelectAllVisible,
-  onEdit,
-  onDelete,
-  onRefresh,
-}: Props) {
-  const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
-    key: 'vencimento',
-    dir: 'asc',
-  });
+export function totalAbertoLista(rows: CobrancaComMembro[]) {
+  return rows.reduce((a, c) => a + valorSaldoCobranca(c), 0);
+}
 
-  const sorted = useMemo(
-    () => sortCobrancas(rows, sort.key, sort.dir),
-    [rows, sort.key, sort.dir],
-  );
+export { groupCobrancasPorMembro };
 
-  const onSort = (key: SortKey) => {
-    setSort((s) => {
-      if (s.key === key) return { key, dir: s.dir === 'asc' ? 'desc' : 'asc' };
-      return { key, dir: defaultDirFor(key) };
-    });
-  };
+export function CobrancasTable({ groups, rows, onEdit, onDelete, onRefresh }: Props) {
+  const lista = groups ?? (rows ? groupCobrancasPorMembro(rows) : []);
 
-  const visibleIds = sorted.map((c) => String(c.id));
-  const totalSelecionadosVisiveis = visibleIds.filter((id) => selectedIds.has(id)).length;
-  const allVisiveisSelecionados = visibleIds.length > 0 && totalSelecionadosVisiveis === visibleIds.length;
-  const someVisiveisSelecionados = totalSelecionadosVisiveis > 0 && !allVisiveisSelecionados;
-  const selectAllRef = useRef<HTMLInputElement | null>(null);
-
-  useEffect(() => {
-    if (!selectAllRef.current) return;
-    selectAllRef.current.indeterminate = someVisiveisSelecionados;
-  }, [someVisiveisSelecionados]);
-
-  if (rows.length === 0) {
-    return <p className="dash-muted">Nenhuma cobrança encontrada.</p>;
+  if (lista.length === 0) {
+    return <p className="dash-cob-empty">Nenhuma cobrança encontrada.</p>;
   }
+
   return (
-    <div className="dash-table-scroll">
-      <table className="dash-table dash-table--cobrancas">
-        <thead>
-          <tr>
-            <th scope="col" className="dash-th-static dash-cob-select-col">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allVisiveisSelecionados}
-                onChange={(e) => onToggleSelectAllVisible(sorted.map((c) => c.id), e.target.checked)}
-                aria-label="Selecionar todas as cobranças visíveis"
-              />
-            </th>
-            <SortTh
-              label="Criação"
-              sortKey="criacao"
-              activeKey={sort.key}
-              dir={sort.dir}
-              onSort={onSort}
-              title="Ordenar por data de criação (mais novo / mais antigo)"
-            />
-            <SortTh
-              label="Data vencimento"
-              sortKey="vencimento"
-              activeKey={sort.key}
-              dir={sort.dir}
-              onSort={onSort}
-              title="Ordenar por vencimento (mais próximo / mais distante)"
-            />
-            <SortTh
-              label="Membro"
-              sortKey="membro"
-              activeKey={sort.key}
-              dir={sort.dir}
-              onSort={onSort}
-              title="Ordenar por nome (A–Z / Z–A)"
-            />
-            <SortTh
-              label="Tipo"
-              sortKey="tipo"
-              activeKey={sort.key}
-              dir={sort.dir}
-              onSort={onSort}
-              title="Ordenar por tipo (A–Z / Z–A)"
-            />
-            <SortTh
-              label="Valores"
-              sortKey="valores"
-              activeKey={sort.key}
-              dir={sort.dir}
-              onSort={onSort}
-              title="Ordenar por valor exibido (maior / menor)"
-            />
-            <SortTh
-              label="Descrição"
-              sortKey="descricao"
-              activeKey={sort.key}
-              dir={sort.dir}
-              onSort={onSort}
-              title="Ordenar por descrição (A–Z / Z–A)"
-            />
-            <th scope="col" className="dash-th-static">
-              Ações
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((c) => (
-            <CobrancaRow
-              key={String(c.id)}
-              cobranca={c}
-              selected={selectedIds.has(String(c.id))}
-              onSelect={onToggleSelect}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onRefresh={onRefresh}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="dash-cob-list" data-tour="cobrancas-lista">
+      {lista.map((g) => (
+        <CobrancaMembroCard
+          key={g.key}
+          grupo={g}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onRefresh={onRefresh}
+        />
+      ))}
     </div>
   );
 }

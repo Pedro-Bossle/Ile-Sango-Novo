@@ -50,6 +50,7 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
   const [loadingPessoa, setLoadingPessoa] = useState(false);
   const [saving, setSaving] = useState(false);
   const [nome, setNome] = useState('');
+  const [dataEntrada, setDataEntrada] = useState('');
   const [dataNascimento, setDataNascimento] = useState('');
   const [contato, setContato] = useState('');
   const [email, setEmail] = useState('');
@@ -105,6 +106,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
     setNome('');
 
+    setDataEntrada('');
+
     setDataNascimento('');
 
     setContato('');
@@ -156,6 +159,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
         const p = c.pessoa;
 
         setNome(p.nome ?? '');
+
+        setDataEntrada(p.data_entrada ?? '');
 
         setDataNascimento(p.data_nascimento ?? '');
 
@@ -382,12 +387,17 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
 
   const updateExu = useCallback((key: string, patch: Partial<ExuFormRow>) => {
-
     setExus((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-
   }, []);
 
-
+  const reorderExus = useCallback((from: number, to: number) => {
+    setExus((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next.map((r, i) => ({ ...r, exu_ordem: i + 1 }));
+    });
+  }, []);
 
   const addUmbanda = useCallback(() => {
 
@@ -412,12 +422,17 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
 
   const updateUmbanda = useCallback((key: string, patch: Partial<UmbandaFormRow>) => {
-
     setUmbanda((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
-
   }, []);
 
-
+  const reorderUmbanda = useCallback((from: number, to: number) => {
+    setUmbanda((prev) => {
+      const next = [...prev];
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
+      return next.map((r, i) => ({ ...r, umbanda_ordem: i + 1 }));
+    });
+  }, []);
 
   const submit = useCallback(async () => {
 
@@ -442,6 +457,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
         id: editId,
 
         nome,
+
+        data_entrada: dataEntrada || null,
 
         data_nascimento: dataNascimento || null,
 
@@ -476,31 +493,42 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
         })),
 
-      exus: exus.map((r) => ({
-
+      exus: exus.map((r, i) => ({
         exu_nome: r.exu_nome,
-
-        exu_ordem: r.exu_ordem,
-
+        exu_ordem: i + 1,
         data_feitura: r.data_feitura,
-
       })),
-
-      umbanda: umbanda.map((r) => ({
-
+      umbanda: umbanda.map((r, i) => ({
         umbanda_nome: r.umbanda_nome,
-
-        umbanda_ordem: r.umbanda_ordem,
-
+        umbanda_ordem: i + 1,
         data_feitura: r.data_feitura,
-
       })),
 
     };
 
     try {
 
-      await savePessoaCompleta(payload);
+      const savedId = await savePessoaCompleta(payload);
+      try {
+        const { writeAuditLog } = await import('../services/auditLog');
+        await writeAuditLog({
+          action: editId ? 'update' : 'create',
+          entity: 'pessoas',
+          entity_id: savedId,
+          resumo: nome,
+          diff: {
+            tela: 'Membros',
+            changes: editId
+              ? [{ campo: 'Ficha', antigo: 'Versão anterior', novo: `Salvo: ${nome}` }]
+              : [
+                  { campo: 'Nome', antigo: null, novo: nome },
+                  { campo: 'Situação', antigo: null, novo: 'Ativo' },
+                ],
+          },
+        });
+      } catch {
+        /* auditoria não bloqueia o save */
+      }
 
       await onSaved();
 
@@ -514,7 +542,7 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
     }
 
-  }, [validate, editId, nome, dataNascimento, contato, email, signo, obs, cadastro, orumale, exus, umbanda, onSaved]);
+  }, [validate, editId, nome, dataEntrada, dataNascimento, contato, email, signo, obs, cadastro, orumale, exus, umbanda, onSaved]);
 
 
 
@@ -586,6 +614,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
 
       nome,
 
+      dataEntrada,
+
       dataNascimento,
 
       contato,
@@ -607,6 +637,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
       error,
 
       setNome,
+
+      setDataEntrada,
 
       setDataNascimento,
 
@@ -633,13 +665,11 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
       removeExu,
 
       updateExu,
-
+      reorderExus,
       addUmbanda,
-
       removeUmbanda,
-
       updateUmbanda,
-
+      reorderUmbanda,
     }),
 
     [
@@ -653,6 +683,8 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
       saving,
 
       nome,
+
+      dataEntrada,
 
       dataNascimento,
 
@@ -687,15 +719,12 @@ export function useMemberForm(editId: UUID | null, onSaved: () => Promise<void> 
       removeExu,
 
       updateExu,
-
+      reorderExus,
       addUmbanda,
-
       removeUmbanda,
-
       updateUmbanda,
-
+      reorderUmbanda,
     ],
-
   );
 
 

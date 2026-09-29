@@ -52,7 +52,7 @@ const Cultos = () => {
 
         <section className="cultos-section cultos-section--malei" aria-labelledby="cultos-malei">
           <h2 id="cultos-malei" className="cultos-section__title">
-            Quimbanda Malei
+            Quimbanda Malêi
           </h2>
           <div className="cultos-section__grid cultos-section__grid--text-left">
             <div className="cultos-section__gallery" role="group" aria-label="Imagens Quimbanda Malei">
@@ -61,23 +61,20 @@ const Cultos = () => {
             </div>
             <div className="cultos-section__text">
               <p>
-                A Quimbanda Malei é uma vertente tradicional das religiões afro-brasileiras, com raízes profundas nos
-                cultos de origem bantu trazidos ao Brasil durante o período colonial. Diferente de visões distorcidas
-                populares, a Quimbanda é uma prática espiritual séria, voltada ao equilíbrio entre forças, à justiça
-                espiritual e ao desenvolvimento pessoal por meio da relação com entidades conhecidas como Exus e
-                Pombagiras.
+                A Quimbanda Malêi é uma tradição de Quimbanda cuja história, segundo sua própria linhagem, remonta ao
+                século XIX. Originalmente conhecida como Bakulú, passou a ser chamada de Malêi a partir de 1939,
+                durante sua expansão para outros estados brasileiros. Também é conhecida como Quimbanda do Cruzeiro, em
+                referência ao Exu Rei das Sete Encruzilhadas.
+              </p>
+              <h3 className="cultos-section__subtitle">Origem e linhagem</h3>
+              <p>
+                A tradição chegou ao Rio Grande do Sul por meio de Freitas, um pernambucano que teve como discípulo
+                direto Dorcides Lencina, em Santa Maria.
               </p>
               <p>
-                Historicamente, a Quimbanda se desenvolveu em paralelo à Umbanda, preservando características mais
-                antigas e menos sincretizadas. A vertente Malei, em especial, mantém fundamentos mais ligados às
-                tradições africanas, com forte ênfase em rituais estruturados, hierarquia e conhecimento transmitido
-                oralmente entre gerações.
-              </p>
-              <p>
-                Entre as práticas clássicas estão oferendas ritualísticas, firmezas, trabalhos espirituais voltados à
-                abertura de caminhos, proteção e resolução de demandas espirituais. Os rituais são conduzidos com
-                respeito, disciplina e dentro de fundamentos específicos, sempre considerando a responsabilidade
-                espiritual envolvida.
+                Dorcides tornou-se uma das principais referências da Quimbanda Malêi no estado, especialmente por sua
+                atuação com a Pombagira Maria Mulambo Sete Covas. Antes de seu falecimento, transmitiu seus fundamentos
+                a mestres preparados, dando continuidade à linhagem.
               </p>
             </div>
           </div>

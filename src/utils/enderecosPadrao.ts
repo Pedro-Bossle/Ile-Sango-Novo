@@ -1,3 +1,5 @@
+import { foldSearchText, matchesSearch } from './searchFold';
+
 const STORAGE_KEY = 'dash_enderecos_padrao';
 export const ENDERECO_EVENTO_PADRAO = 'R. Visc. de Pelotas, 2576 - Pio X, Caxias do Sul - RS, 95034385';
 
@@ -7,7 +9,7 @@ function uniqueList(list: string[]): string[] {
   for (const raw of list) {
     const v = String(raw ?? '').trim();
     if (!v) continue;
-    const key = v.toLowerCase();
+    const key = foldSearchText(v);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(v);
@@ -40,7 +42,7 @@ export function saveEnderecosPadrao(list: string[]): string[] {
 }
 
 export function filtrarEnderecosPadrao(list: string[], query: string): string[] {
-  const q = query.trim().toLowerCase();
+  const q = query.trim();
   if (!q) return [];
-  return list.filter((item) => item.toLowerCase().includes(q));
+  return list.filter((item) => matchesSearch(item, q));
 }

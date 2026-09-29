@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 export interface DadosPdfMembro {
   nome: string;
   nascimento: string;
+  entrada?: string;
   signo: string;
   telefone: string;
   email: string;
@@ -121,6 +122,9 @@ export const gerarPdfPerfil = (dados: DadosPdfMembro): void => {
 
   linhaLabel([
     { label: 'Nome:', valor: dados.nome },
+    { label: 'Entrada (iniciação):', valor: dados.entrada || '—' },
+  ]);
+  linhaLabel([
     { label: 'Nascimento:', valor: dados.nascimento },
     { label: 'Signo:', valor: dados.signo },
   ]);
