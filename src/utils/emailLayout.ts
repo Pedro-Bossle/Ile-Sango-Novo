@@ -1,7 +1,8 @@
 /** Base pública para assets de e-mail (assinatura precisa de URL absoluta HTTPS). */
 export const EMAIL_PUBLIC_ORIGIN = 'https://casadease.com.br';
 
-const ASSINATURA_PATH = '/images/email/assinatura_email.png';
+/** Query string força clientes de e-mail a buscar a imagem nova (mesma URL sem v= fica em cache). */
+const ASSINATURA_PATH = '/images/email/assinatura_email.png?v=2';
 
 export function escapeHtmlEmail(s: string): string {
   return String(s)

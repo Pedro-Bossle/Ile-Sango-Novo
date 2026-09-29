@@ -46,7 +46,7 @@ function escapeHtml(s: string): string {
 }
 
 function signatureHtml(): string {
-  const src = `${publicBaseUrl()}/images/email/assinatura_email.png`;
+  const src = `${publicBaseUrl()}/images/email/assinatura_email.png?v=2`;
   return `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:28px;border-collapse:collapse;">
   <tr>

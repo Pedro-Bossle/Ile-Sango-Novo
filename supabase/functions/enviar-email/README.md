@@ -15,7 +15,8 @@ supabase secrets set EMAIL_FROM="noreply@casadease.com.br"
 
 A imagem da assinatura deve estar publicada em:
 
-`{EMAIL_PUBLIC_BASE_URL}/images/email/assinatura_email.png`
+`{EMAIL_PUBLIC_BASE_URL}/images/email/assinatura_email.png?v=2`
+(atualize `?v=` ao trocar a arte, para furar cache do Gmail/Outlook)
 
 ## Deploy
 
