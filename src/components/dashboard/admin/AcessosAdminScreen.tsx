@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState, Fragment } from 'react';
+import { useEffect, useMemo, useState, Fragment } from 'react';
 import {
   ALL_RESOURCES,
   PERMISSION_PRESETS,

@@ -1,11 +1,9 @@
-﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchCaixaCategorias } from '../../../services/caixa';
 import {
-  cobrancaPassaFiltroIntervalo,
   deleteCobranca,
   fetchRelatorioValoresPagos,
   fetchCobrancasComMembros,
-  filtroPeriodoVazio,
   insertCobranca,
   isCobrancaPendente,
   isCobrancaContabilizavel,
@@ -17,20 +15,16 @@ import {
   valorTotalCobranca,
   valorPagoCobranca,
   type CobrancaComMembro,
-  type FiltroPeriodoCobranca,
   type LinhaRelatorioValoresPagos,
 } from '../../../services/cobrancas';
 import { matchesSearchFields } from '../../../utils/searchFold';
 import { fetchPessoasOptions } from '../../../services/pessoasLookup';
 import { fetchConfigIle, formatarEnderecoIle } from '../../../services/configIle';
 import { writeAuditLog, buildAuditDiff } from '../../../services/auditLog';
-import { enviarEmail } from '../../../services/enviarEmail';
-import { buildWaMeLink, openExternal } from '../../../utils/whatsappLink';
 import { formatDateBR } from '../../../utils/formatDate';
 import { parseValorInput, sanitizeValorInput, valorToMaskedInput } from '../../../utils/money';
 import { gerarPdfRelatorio, type LinhaRelatorio } from '../../../utils/pdfRelatorio';
 import { carregarLogoBase64 } from '../../../utils/logoBase64';
-import { saudacaoFilhoSanto } from '../../../utils/saudacaoFilhoSanto';
 import { Toast } from '../Toast';
 import { CobrancaForm, type CobrancaFormValues } from './CobrancaForm';
 import { CobrancasTable, groupCobrancasPorMembro } from './CobrancasTable';
@@ -55,8 +49,6 @@ const COBRANCA_FIELD_LABELS: Record<string, string> = {
 export function CobrancasScreen({ canSend = true }: Props) {
   const [rows, setRows] = useState<CobrancaComMembro[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rascunhoPeriodo, setRascunhoPeriodo] = useState<FiltroPeriodoCobranca>(filtroPeriodoVazio);
-  const [periodoAplicado, setPeriodoAplicado] = useState<FiltroPeriodoCobranca | null>(null);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CobrancaComMembro | null>(null);
@@ -65,7 +57,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
   const [statusFiltro, setStatusFiltro] = useState<'todas' | 'em_aberto' | 'atrasada'>('todas');
   const [ordenacao, setOrdenacao] = useState<'nome-asc' | 'nome-desc' | 'venc-asc' | 'venc-desc' | 'valor-desc'>('nome-asc');
   const [maisOpen, setMaisOpen] = useState(false);
-  const [pixKey, setPixKey] = useState('');
   const [ileNome, setIleNome] = useState('Ilê');
   const [ileLogo, setIleLogo] = useState<string | null>(null);
   const [ileEndereco, setIleEndereco] = useState('');
@@ -85,7 +76,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
     descricao: '',
   });
   const [categoriaOptions, setCategoriaOptions] = useState<SearchableSelectOption[]>([]);
-  const [mostrarPagas, setMostrarPagas] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkActionOpen, setBulkActionOpen] = useState<'pagar' | 'excluir' | null>(null);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
@@ -123,7 +113,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
     void reload();
     fetchConfigIle()
       .then(async (c) => {
-        setPixKey(c.chave_pix ?? '');
         setIleNome(c.nome_ile?.trim() || 'Ilê');
         setIleEndereco(formatarEnderecoIle(c));
         if (c.logo_base64) {
@@ -184,9 +173,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
 
   const filtered = useMemo(() => {
     let list = rows;
-    if (periodoAplicado?.de && periodoAplicado?.ate) {
-      list = list.filter((c) => cobrancaPassaFiltroIntervalo(c, periodoAplicado));
-    }
     const q = buscaMembro.trim();
     if (q) {
       list = list.filter((c) => {
@@ -215,7 +201,7 @@ export function CobrancasScreen({ canSend = true }: Props) {
       }
     });
     return sorted;
-  }, [rows, periodoAplicado, buscaMembro, statusFiltro, ordenacao]);
+  }, [rows, buscaMembro, statusFiltro, ordenacao]);
 
   const grupos = useMemo(() => {
     const g = groupCobrancasPorMembro(filtered);
@@ -273,11 +259,11 @@ export function CobrancasScreen({ canSend = true }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, statusFiltro, ordenacao]);
+  }, [buscaMembro, statusFiltro, ordenacao]);
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [page, pageSize, buscaMembro, periodoAplicado?.de, periodoAplicado?.ate, statusFiltro]);
+  }, [page, pageSize, buscaMembro, statusFiltro]);
 
   const reportModalRef = useRef<HTMLDivElement | null>(null);
   const reportTableScrollRef = useRef<HTMLDivElement | null>(null);
@@ -310,11 +296,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
     return () => modal.removeEventListener('wheel', onWheel);
   }, [reportOpen]);
 
-  /** Soma dos saldos em aberto respeitando a mesma lista filtrada da tabela (período + nome). */
-  const subtotalAberto = useMemo(() => {
-    return filtered.filter((c) => isCobrancaContabilizavel(c)).reduce((a, c) => a + valorSaldoCobranca(c), 0);
-  }, [filtered]);
-
   const formatBRL = (n: number) =>
     n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
 
@@ -342,27 +323,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
         descricao: '',
         valor: Math.round(g.valor * 100) / 100,
       }));
-  };
-
-  const aplicarFiltro = () => {
-    const { de, ate } = rascunhoPeriodo;
-    if (!de || !ate) {
-      setToast({ msg: 'Preencha data inicial e final.', variant: 'error' });
-      return;
-    }
-    if (de > ate) {
-      setToast({ msg: 'A data inicial não pode ser maior que a final.', variant: 'error' });
-      return;
-    }
-    setPeriodoAplicado({ de, ate });
-  };
-
-  const limparFiltros = () => {
-    setRascunhoPeriodo(filtroPeriodoVazio());
-    setPeriodoAplicado(null);
-    setBuscaMembro('');
-    setStatusFiltro('todas');
-    setPage(1);
   };
 
   const copiarLista = async () => {
@@ -469,79 +429,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
     await reload({ silent: true });
   };
 
-  const msgCobranca = (c: CobrancaComMembro) => {
-    const saldo = valorSaldoCobranca(c);
-    const venc = formatDateBR(c.vencimento);
-    const ref = c.descricao || c.tipo || 'pendência';
-    const saldoFmt = saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const pixLine = pixKey ? `\nPix: ${pixKey}` : '';
-    const saudacao = saudacaoFilhoSanto({
-      nome: c.membro_nome,
-      orixaCabeca: c.membro_orixa_cabeca_nome,
-      qualidadeCabeca: c.membro_orixa_cabeca_qualidade_nome,
-    });
-    // WhatsApp: mensagem curta numa linha
-    return `${saudacao} Cobrança do ${ileNome}: ${ref} — saldo ${saldoFmt} (venc. ${venc}).${pixLine}\nObrigado!`;
-  };
-
-  const msgCobrancaEmail = (c: CobrancaComMembro) => {
-    const saldo = valorSaldoCobranca(c);
-    const venc = formatDateBR(c.vencimento);
-    const ref = c.descricao || c.tipo || 'pendência';
-    const saldoFmt = saldo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    return [
-      saudacaoFilhoSanto({
-        nome: c.membro_nome,
-        orixaCabeca: c.membro_orixa_cabeca_nome,
-        qualidadeCabeca: c.membro_orixa_cabeca_qualidade_nome,
-        fim: ',',
-      }),
-      '',
-      `Segue o lembrete de cobrança do ${ileNome}.`,
-      '',
-      `Referência: ${ref}`,
-      `Saldo em aberto: ${saldoFmt}`,
-      `Vencimento: ${venc || '—'}`,
-      ...(pixKey ? [`Pix: ${pixKey}`] : []),
-      '',
-      'Qualquer dúvida, estamos à disposição.',
-      'Obrigado!',
-    ].join('\n');
-  };
-
-  const enviarWhatsApp = (c: CobrancaComMembro) => {
-    const url = buildWaMeLink(c.membro_contato, msgCobranca(c));
-    if (!url) {
-      setToast({ msg: 'Membro sem telefone cadastrado.', variant: 'error' });
-      return;
-    }
-    openExternal(url);
-  };
-
-  const enviarEmailCobranca = (c: CobrancaComMembro) => {
-    void (async () => {
-      const to = String(c.membro_email ?? '').trim();
-      if (!to) {
-        setToast({ msg: 'Membro sem e-mail cadastrado.', variant: 'error' });
-        return;
-      }
-      try {
-        await enviarEmail({
-          to,
-          subject: `Cobrança — ${ileNome}`,
-          title: 'Lembrete de cobrança',
-          text: msgCobrancaEmail(c),
-        });
-        setToast({ msg: 'E-mail enviado pelo No-reply.', variant: 'success' });
-      } catch (e) {
-        setToast({
-          msg: e instanceof Error ? e.message : 'Não foi possível enviar o e-mail.',
-          variant: 'error',
-        });
-      }
-    })();
-  };
-
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     const targetId = deleteTarget.id;
@@ -571,32 +458,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
     }
   };
 
-  const gerarRelatorioPorNome = () => {
-    if (!buscaMembro.trim()) {
-      setToast({ msg: 'Digite um nome na pesquisa antes de gerar o relatório por nome.', variant: 'error' });
-      return;
-    }
-    const linhas = montarLinhasPdf(filtered);
-    if (!linhas.length) {
-      setToast({ msg: 'Nenhum valor em aberto para o relatório.', variant: 'error' });
-      return;
-    }
-    const total = linhas.reduce((a, b) => a + b.valor, 0);
-    gerarPdfRelatorio({
-      periodo: periodoAplicado,
-      linhas,
-      total,
-      tituloPrincipal: 'Cobranças em aberto — por nome',
-      subtitulo: `Pesquisa: “${buscaMembro.trim()}”. Uma linha por pessoa — total devido.`,
-      ileNome,
-      ileEndereco,
-      logoBase64: ileLogo,
-      variante: 'aberto',
-      totalLabel: 'Total em aberto',
-      fileNamePrefix: 'cobrancas-aberto-nome',
-    });
-  };
-
   const gerarRelatorioObrigacoesAberto = () => {
     const linhas = montarLinhasPdf(filtered);
     if (!linhas.length) {
@@ -605,7 +466,7 @@ export function CobrancasScreen({ canSend = true }: Props) {
     }
     const total = linhas.reduce((a, b) => a + b.valor, 0);
     gerarPdfRelatorio({
-      periodo: periodoAplicado,
+      periodo: null,
       linhas,
       total,
       tituloPrincipal: 'Cobranças em aberto',
@@ -695,28 +556,6 @@ export function CobrancasScreen({ canSend = true }: Props) {
   };
 
   const selectedRows = useMemo(() => rows.filter((r) => selectedIds.has(String(r.id))), [rows, selectedIds]);
-
-  const toggleSelect = (id: string | number, checked: boolean) => {
-    const key = String(id);
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) next.add(key);
-      else next.delete(key);
-      return next;
-    });
-  };
-
-  const toggleSelectAllVisible = (ids: Array<string | number>, checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => {
-        const key = String(id);
-        if (checked) next.add(key);
-        else next.delete(key);
-      });
-      return next;
-    });
-  };
 
   const executarExcluirEmLote = async () => {
     if (!selectedRows.length) return;

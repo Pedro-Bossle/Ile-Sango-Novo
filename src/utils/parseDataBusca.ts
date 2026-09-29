@@ -46,7 +46,7 @@ export function parseDataBusca(raw: string): Date | null {
   const iso = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (iso) return asLocalDate(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]));
 
-  const br = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  const br = s.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
   if (br) {
     const d = Number(br[1]);
     const m = Number(br[2]) - 1;

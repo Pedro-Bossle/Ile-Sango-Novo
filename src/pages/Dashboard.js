@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import './Dashboard.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -165,12 +165,12 @@ const Dashboard = () => {
     return 'fin';
   });
   const [aniversarios, setAniversarios] = useState([]);
-  const [atendResumo, setAtendResumo] = useState({ compromissosHoje: 0, orcamentosEnviados: 0, proximos48h: [] });
+  const [, setAtendResumo] = useState({ compromissosHoje: 0, orcamentosEnviados: 0, proximos48h: [] });
   const [proximoCompromisso, setProximoCompromisso] = useState(null);
   const [agendaCategorias, setAgendaCategorias] = useState([]);
   const [saldoMes, setSaldoMes] = useState(0);
   const [fluxoFade, setFluxoFade] = useState(0); // 0 entradas 30d · 1 saídas 30d
-  const [mensalidadesPendentes, setMensalidadesPendentes] = useState({ membros: 0, competencias: 0, valor: 0 });
+  const [, setMensalidadesPendentes] = useState({ membros: 0, competencias: 0, valor: 0 });
   const [atendClienteId, setAtendClienteId] = useState(null);
   const [atendimentoLiveId, setAtendimentoLiveId] = useState(null);
   const modalRef = useRef(null);
@@ -624,22 +624,6 @@ const Dashboard = () => {
     sessionStorage.setItem('dash_grp_open', id);
   };
 
-  const abrirEdicaoEvento = (evento) => {
-    setEventoForm({ ...defaultEvento, ...evento });
-    setMostrarModalEvento(true);
-  };
-
-
-  const abrirAdicaoEvento = (dataIso) => {
-    const data =
-      typeof dataIso === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dataIso)
-        ? dataIso
-        : '';
-    setEventoForm({ ...defaultEvento, data });
-    setMostrarModalEvento(true);
-  };
-
-
   const selecionarTipoEvento = (tipo) => {
     setEventoForm((prev) => ({
       ...prev,
@@ -672,13 +656,6 @@ const Dashboard = () => {
     }
   };
 
-
-  const abrirModalEnderecos = () => {
-    setEnderecosPadrao(loadEnderecosPadrao());
-    setEnderecoDraft('');
-    setEnderecoEditIndex(null);
-    setMostrarModalEnderecos(true);
-  };
 
   const salvarEnderecoPadrao = (e) => {
     e.preventDefault();
