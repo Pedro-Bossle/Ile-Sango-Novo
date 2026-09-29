@@ -5,6 +5,7 @@
   --dash-control-h: 44px;
   --dash-toolbar-h: 40px;
   min-height: 100vh;
+  min-height: 100dvh;
   background: #f7f5f3;
   position: relative;
   display: block;
@@ -15,6 +16,7 @@
   top: 0;
   left: 0;
   height: 100vh;
+  height: 100dvh;
   width: 72px;
   background: #fff;
   color: #3a3a3a;
@@ -1090,15 +1092,31 @@
     height: 100vh;
     height: 100dvh;
     width: min(300px, 88vw);
-    z-index: 30;
+    z-index: 32;
     transform: translateX(105%);
     overflow: hidden;
-    padding: 1rem 1rem 1.25rem;
+    /* Espaço p/ tab bar (+ tutorial): rodapé do Mais não fica sob a barra */
+    padding: 1rem 1rem calc(var(--dash-mobile-chrome) + 0.85rem);
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+    box-sizing: border-box;
   }
 
   .dash-sidebar.open {
     transform: translateX(0);
+  }
+
+  .dash-sidebar.open .dash-sidebar-nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.35rem;
+  }
+
+  .dash-sidebar.open .dash-sidebar-footer {
+    flex-shrink: 0;
+    margin-top: 0.35rem;
+    padding-bottom: 0.15rem;
   }
 
   .dash-sidebar.is-expanded,
@@ -1228,7 +1246,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 30;
+    z-index: 35;
     height: calc(var(--dash-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
     padding: 0 0.25rem env(safe-area-inset-bottom, 0px);
     background: #fff;
@@ -1284,7 +1302,7 @@
     left: 0;
     right: 0;
     bottom: calc(var(--dash-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
-    z-index: 29;
+    z-index: 34;
     height: var(--dash-mobile-footer-h);
     padding: 0 0.75rem;
     align-items: center;
@@ -1333,18 +1351,18 @@
   }
 
   body[data-mensalidades="1"] .dash-page {
-    height: 100dvh;
-    max-height: 100dvh;
-    overflow: hidden;
+    height: auto;
+    max-height: none;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   body[data-mensalidades="1"] .dash-content {
-    height: 100%;
-    max-height: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    padding-bottom: 0;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    display: block;
+    padding-bottom: calc(var(--dash-mobile-chrome) + 0.75rem);
   }
 
   body[data-mensalidades="1"] .dash-content::after {
@@ -1354,20 +1372,47 @@
   }
 
   body[data-mensalidades="1"] .dash-content > .dash-screen-keepalive:not([hidden]) {
-    flex: 1 1 auto;
+    flex: none;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    padding-bottom: calc(var(--dash-mobile-chrome) + 0.75rem);
-    box-sizing: border-box;
+    display: block;
+    overflow: visible;
+    padding-bottom: 0;
   }
 
-  /* FAB Voltar/Salvar da ficha: acima da tab bar + tutorial */
+  /* Sem barra inferior / tutorial quando há FAB, ficha ou modal */
+  body[data-ficha-membro='1'] .dash-page,
+  body[data-ficha-cliente='1'] .dash-page,
+  body:has(.dash-membro-fab) .dash-page,
+  body:has(.dash-modal-overlay) .dash-page,
+  body:has(.dash-panel-slide) .dash-page,
+  body:has(.dash-atend-live) .dash-page,
+  body:has(.dash-inbox) .dash-page {
+    --dash-bottom-nav-h: 0px;
+    --dash-mobile-footer-h: 0px;
+  }
+
+  body[data-ficha-membro='1'] nav.dash-bottom-nav,
+  body[data-ficha-membro='1'] footer.dash-mobile-footer,
+  body[data-ficha-cliente='1'] nav.dash-bottom-nav,
+  body[data-ficha-cliente='1'] footer.dash-mobile-footer,
+  body:has(.dash-membro-fab) nav.dash-bottom-nav,
+  body:has(.dash-membro-fab) footer.dash-mobile-footer,
+  body:has(.dash-modal-overlay) nav.dash-bottom-nav,
+  body:has(.dash-modal-overlay) footer.dash-mobile-footer,
+  body:has(.dash-panel-slide) nav.dash-bottom-nav,
+  body:has(.dash-panel-slide) footer.dash-mobile-footer,
+  body:has(.dash-atend-live) nav.dash-bottom-nav,
+  body:has(.dash-atend-live) footer.dash-mobile-footer,
+  body:has(.dash-inbox) nav.dash-bottom-nav,
+  body:has(.dash-inbox) footer.dash-mobile-footer {
+    display: none !important;
+  }
+
+  /* FAB Voltar/Salvar da ficha: sem tab bar por baixo */
   .dash-membro-fab {
     left: 0.65rem;
     right: 0.65rem;
-    bottom: calc(var(--dash-mobile-chrome) + 0.45rem);
+    bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
     width: auto;
     max-width: none;
     justify-content: stretch;
@@ -1381,11 +1426,12 @@
 
   body[data-ficha-membro='1'] .dash-member-form--with-fab,
   .dash-member-form--with-fab {
-    padding-bottom: calc(var(--dash-mobile-chrome) + 5.75rem);
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
 
-  body[data-ficha-membro='1'] .dash-content::after {
-    height: calc(var(--dash-mobile-chrome) + 0.5rem);
+  body[data-ficha-membro='1'] .dash-content::after,
+  body[data-ficha-cliente='1'] .dash-content::after {
+    height: calc(0.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   .dash-pagination {
@@ -2554,11 +2600,13 @@ body[data-ficha-membro="1"] .dash-scroll-top {
   top: 0;
   right: 0;
   height: 100vh;
+  height: 100dvh;
   width: min(440px, 100%);
   background: var(--branco-puro);
   z-index: 45;
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dash-panel-slide__inner {
@@ -3957,11 +4005,13 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 }
 
 .dash-modal--relatorio-pagos {
-  width: min(1060px, 96vw);
+  width: min(1060px, 96%);
   max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
   overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .dash-relatorio-filtros {
@@ -4634,8 +4684,9 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 }
 
 .dash-event-sheet {
-  width: min(440px, 100vw);
+  width: min(440px, 100%);
   max-height: min(92vh, 720px);
+  max-height: min(92dvh, 720px);
   margin: 0;
   padding: 0;
   border-radius: 16px 16px 0 0;
@@ -4648,8 +4699,9 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 
 @media (min-width: 640px) {
   .dash-event-sheet {
-    width: min(560px, calc(100vw - 2rem));
+    width: min(560px, calc(100% - 2rem));
     max-height: min(90vh, 680px);
+    max-height: min(90dvh, 680px);
     border-radius: 14px;
     box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
   }
@@ -4657,8 +4709,9 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 
 @media (min-width: 900px) {
   .dash-event-sheet {
-    width: min(760px, calc(100vw - 3rem));
+    width: min(760px, calc(100% - 3rem));
     max-height: min(86vh, 620px);
+    max-height: min(86dvh, 620px);
   }
 }
 
@@ -5012,6 +5065,44 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 }
 
 @media (max-width: 720px) {
+  .dash-cal__toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.55rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .dash-cal__nav {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.35rem;
+  }
+
+  .dash-cal__title {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.95rem;
+  }
+
+  .dash-cal__toolbar-end {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    gap: 0.4rem;
+  }
+
+  .dash-cal__today,
+  .dash-cal__copia {
+    width: 100%;
+    min-height: 40px;
+    padding: 0 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    font-size: 0.86rem;
+  }
+
   .dash-cal__grid {
     grid-auto-rows: minmax(72px, auto);
   }
@@ -5024,11 +5115,6 @@ th[aria-sort="descending"] .dash-th-sort__icons {
   .dash-cal__chip {
     font-size: 0.62rem;
     padding: 0.08rem 0.2rem;
-  }
-
-  .dash-cal__title {
-    font-size: 0.95rem;
-    min-width: 7.5rem;
   }
 }
 
@@ -7411,7 +7497,7 @@ th[aria-sort="descending"] .dash-th-sort__icons {
   min-height: 0;
 }
 
-/* Limita scroll ? tabela virtual (p?gina principal n?o rola) */
+/* Desktop: scroll interno na grade. Mobile sobrescreve no @media max-width 900. */
 body[data-mensalidades='1'] .dash-page {
   height: 100dvh;
   max-height: 100dvh;
@@ -7473,6 +7559,57 @@ body[data-mensalidades='1'] .dash-mens__cards {
   overflow: auto;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  body[data-mensalidades='1'] .dash-page {
+    height: auto;
+    max-height: none;
+    min-height: 100dvh;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body[data-mensalidades='1'] .dash-content {
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    display: block;
+    padding-bottom: calc(var(--dash-mobile-chrome) + 1rem);
+  }
+
+  body[data-mensalidades='1'] .dash-content > .dash-screen-keepalive:not([hidden]) {
+    display: block;
+    flex: none;
+    overflow: visible;
+    min-height: 0;
+  }
+
+  body[data-mensalidades='1'] .dash-mens {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    overflow: visible;
+    min-height: 0;
+    flex: none;
+  }
+
+  body[data-mensalidades='1'] .dash-mens__scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    overflow: visible;
+    flex: none;
+    min-height: 0;
+  }
+
+  body[data-mensalidades='1'] .dash-mens__cards {
+    overflow: visible;
+    flex: none;
+    min-height: 0;
+    padding-bottom: 0.5rem;
+  }
 }
 
 .dash-mens__header {
@@ -8182,32 +8319,43 @@ body[data-mensalidades='1'] .dash-mens__cards {
     min-width: 0;
   }
 
-  /* KPIs: 2 no topo + atrasado em largura total (como no print) */
+  /* KPIs: 3 colunas compactas no mobile */
   .dash-mens__kpis,
   .dash-grid-stats.dash-mens__kpis {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.55rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
   }
 
   .dash-mens__kpi--atrasado {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 
   .dash-mens__kpis .dash-card {
-    padding: 0.7rem 0.85rem;
-    border-radius: 10px;
-    box-shadow: 0 1px 3px rgb(0 0 0 / 6%);
+    padding: 0.5rem 0.45rem;
+    border-radius: 8px;
+    box-shadow: none;
+    min-width: 0;
   }
 
   .dash-mens__kpis .dash-card h3 {
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     font-weight: 500;
     color: #888;
+    margin: 0 0 0.2rem;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .dash-mens__kpis .dash-big {
-    font-size: 1.15rem;
+    font-size: 0.88rem;
+    line-height: 1.15;
+  }
+
+  .dash-mens__kpi--atrasado .dash-card h3 {
+    white-space: normal;
   }
 
   .dash-mens__desktop-only {

@@ -126,6 +126,15 @@ export function ClientesScreen({
   });
   const { ask: askConfirm, modal: confirmModal } = useConfirmAction();
 
+  useEffect(() => {
+    if (!sel) {
+      document.body.removeAttribute('data-ficha-cliente');
+      return;
+    }
+    document.body.setAttribute('data-ficha-cliente', '1');
+    return () => document.body.removeAttribute('data-ficha-cliente');
+  }, [sel]);
+
   const reload = async () => {
     const [rows, mems] = await Promise.all([fetchClientes(verExcluidos), fetchMembrosParaMatch()]);
     setLista(rows);
