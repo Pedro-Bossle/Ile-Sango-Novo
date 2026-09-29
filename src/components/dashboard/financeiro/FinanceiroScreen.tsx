@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   createCaixaCategoria,
   createCaixaManual,
@@ -18,6 +17,7 @@ import { formatDateBR } from '../../../utils/formatDate';
 import { parseValorInput, sanitizeValorInput, valorToMaskedInput } from '../../../utils/money';
 import { matchesSearchFields } from '../../../utils/searchFold';
 import { gerarPdfRelatorio } from '../../../utils/pdfRelatorio';
+import { exportCaixaExcel } from '../../../utils/exportCaixaExcel';
 import { carregarLogoBase64 } from '../../../utils/logoBase64';
 import { fetchConfigIle, formatarEnderecoIle } from '../../../services/configIle';
 import { onModalOverlayClick } from '../../../utils/modalOverlay';
@@ -371,21 +371,12 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
   };
 
   const exportExcel = () => {
-    const header = ['Data', 'Tipo', 'Categoria', 'Pgto', 'Descrição', 'Valor', 'Origem', 'Membro'];
-    const body = filtrados.map((r) => [
-      r.data,
-      r.tipo,
-      r.categoria,
-      r.forma_pagamento ?? '',
-      r.descricao ?? '',
-      Number(r.valor),
-      r.origem,
-      r.membro_nome ?? '',
-    ]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...body]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, `Caixa ${ano}`);
-    XLSX.writeFile(wb, `caixa_${ano}.xlsx`);
+    void exportCaixaExcel(filtrados, ano).catch((err) => {
+      setToast({
+        msg: err instanceof Error ? err.message : 'Erro ao exportar Excel.',
+        variant: 'error',
+      });
+    });
   };
 
   const exportPdf = () => {

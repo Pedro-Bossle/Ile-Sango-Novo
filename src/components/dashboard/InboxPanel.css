@@ -72,7 +72,8 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: min(920px, 100vw);
+  width: min(920px, 100%);
+  max-width: 100%;
   height: 100vh;
   height: 100dvh;
   background: #faf8f6;
@@ -81,6 +82,8 @@
   display: flex;
   flex-direction: column;
   box-shadow: -8px 0 28px rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .dash-inbox__head {
@@ -91,18 +94,22 @@
   padding: 1rem 1.1rem;
   border-bottom: 1px solid #e8e0d8;
   background: #fff;
+  min-width: 0;
+  flex-shrink: 0;
 }
 
 .dash-inbox__head h2 {
   margin: 0;
   font-size: 1.15rem;
   color: var(--bordo, #530526);
+  min-width: 0;
 }
 
 .dash-inbox__head-actions {
   display: flex;
   align-items: center;
   gap: 0.45rem;
+  flex-shrink: 0;
 }
 
 .dash-inbox__close {
@@ -126,8 +133,10 @@
 .dash-inbox__body {
   flex: 1;
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) 1.4fr;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .dash-inbox__list {
@@ -135,10 +144,12 @@
   border-right: 1px solid #e8e0d8;
   background: #fff;
   padding: 0.5rem;
+  min-width: 0;
 }
 
 .dash-inbox__item {
   width: 100%;
+  max-width: 100%;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -151,6 +162,9 @@
   font: inherit;
   cursor: pointer;
   appearance: none;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dash-inbox__item.is-unread {
@@ -170,20 +184,34 @@
 }
 
 .dash-inbox__detail {
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   padding: 1rem 1.15rem 1.5rem;
+  min-width: 0;
 }
 
 .dash-inbox__detail h3 {
   margin: 0 0 0.35rem;
   color: var(--bordo, #530526);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.dash-inbox__meta {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dash-inbox__dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem 1rem;
+  gap: 0.55rem 0.75rem;
   margin: 0.85rem 0;
+  min-width: 0;
+}
+
+.dash-inbox__dl > div {
+  min-width: 0;
 }
 
 .dash-inbox__dl dt {
@@ -194,10 +222,13 @@
 .dash-inbox__dl dd {
   margin: 0.1rem 0 0;
   color: #1a1512;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dash-inbox__block {
   margin: 0.85rem 0;
+  min-width: 0;
 }
 
 .dash-inbox__block h4 {
@@ -208,6 +239,8 @@
 .dash-inbox__block ul {
   margin: 0;
   padding-left: 1.1rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dash-inbox__actions {
@@ -217,14 +250,37 @@
   margin-top: 1rem;
 }
 
+.dash-inbox__actions .dash-btn-primary,
+.dash-inbox__actions .dash-btn-danger-outline {
+  max-width: 100%;
+}
+
 @media (max-width: 760px) {
+  .dash-inbox {
+    width: 100%;
+    border-left: none;
+  }
+
+  .dash-inbox__head {
+    padding: 0.85rem 0.9rem;
+  }
+
   .dash-inbox__body {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dash-inbox__list {
-    max-height: 40vh;
+    max-height: 36vh;
     border-right: none;
     border-bottom: 1px solid #e8e0d8;
+  }
+
+  .dash-inbox__detail {
+    padding: 0.85rem 0.9rem 1.25rem;
+  }
+
+  .dash-inbox__dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.45rem;
   }
 }

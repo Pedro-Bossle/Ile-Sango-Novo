@@ -23,6 +23,7 @@ export function PaginationControls({ totalItems, currentPage, pageSize, onPageCh
   const end = Math.min(totalItems, safePage * pageSize);
 
   const pages = useMemo(() => {
+    if (totalItems < 20) return [] as Array<number | '...'>;
     const out: Array<number | '...'> = [];
     const add = (v: number | '...') => out.push(v);
     if (totalPages <= 7) {
@@ -35,7 +36,9 @@ export function PaginationControls({ totalItems, currentPage, pageSize, onPageCh
     if (safePage < totalPages - 2) add('...');
     add(totalPages);
     return out;
-  }, [safePage, totalPages]);
+  }, [safePage, totalPages, totalItems]);
+
+  if (totalItems < 20) return null;
 
   return (
     <div className="dash-pagination">

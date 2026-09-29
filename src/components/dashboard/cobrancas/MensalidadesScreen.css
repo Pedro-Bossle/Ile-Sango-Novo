@@ -22,15 +22,18 @@
 .dash-mens__extras {
   position: relative;
   align-self: flex-end;
+  z-index: 40;
 }
 
 .dash-mens__extras-menu {
   position: absolute;
   top: calc(100% + 0.35rem);
-  right: 0;
-  z-index: 20;
-  min-width: 12rem;
-  padding: 0.45rem;
+  left: 0;
+  right: auto;
+  z-index: 50;
+  min-width: 14rem;
+  max-width: min(18rem, calc(100vw - 2rem));
+  padding: 0.5rem;
   background: #fff;
   border: 1px solid #e4d8ca;
   border-radius: 10px;
@@ -38,6 +41,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  box-sizing: border-box;
 }
 
 .dash-mens__extras-check {
@@ -49,6 +53,7 @@
   font-size: 0.9rem;
   color: #3d342e;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .dash-mens__extras-lote {
@@ -59,6 +64,31 @@
 
 .dash-mens__extras-lote-action {
   width: 100%;
+  justify-content: flex-start !important;
+  text-align: left;
+  white-space: nowrap;
+  color: #3d342e !important;
+  background: #fff !important;
+  border: 1px solid #d7cdc4 !important;
+  min-height: 40px;
+  padding: 0.45rem 0.75rem !important;
+  font-size: 0.9rem !important;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.dash-mens__extras-lote-action:hover:not(:disabled) {
+  border-color: var(--bordo, #530526) !important;
+  color: var(--bordo, #530526) !important;
+  background: #faf7f4 !important;
+}
+
+.dash-mens__extras-check input {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  accent-color: var(--bordo, #530526);
+  cursor: pointer;
 }
 
 .dash-mens__scroll {
@@ -126,7 +156,7 @@
   border: none;
   border-radius: 0;
   background: transparent;
-  padding: 0.35rem 0.15rem 0;
+  padding: 0.35rem 0.15rem 0.75rem;
   position: sticky;
   bottom: 0;
   z-index: 2;

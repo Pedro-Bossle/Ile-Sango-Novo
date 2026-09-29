@@ -43,6 +43,7 @@ const ACOES: { key: keyof PermFlags; label: string; hint: string }[] = [
 /** Extras de mensalidades (independentes de admin) — entram no diff de auditoria. */
 const EXTRAS_MENSALIDADE: { key: keyof PermFlags; label: string }[] = [
   { key: 'lote', label: 'Lote' },
+  { key: 'sem_caixa', label: 'Sem caixa' },
 ];
 
 function buildPermissionsAuditDiff(
@@ -453,7 +454,7 @@ export function AcessosAdminScreen() {
               <section className="dash-acessos__block">
                 <h3>Mensalidades — opções extras</h3>
                 <p className="dash-muted dash-acessos__block-hint">
-                  Independente de administrador: marque só se esta pessoa puder usar pagamento em lote.
+                  Independente de administrador: marque só o que esta pessoa pode usar em Mensalidades.
                 </p>
                 <div className="dash-acessos__flags">
                   <label className="dash-acessos__check">
@@ -464,7 +465,18 @@ export function AcessosAdminScreen() {
                     />
                     <span>
                       <strong>Lote</strong>
-                      <small>Pagar o mês atual em lote na tela de mensalidades</small>
+                      <small>Pagar / abrir / isentar o mês em lote</small>
+                    </span>
+                  </label>
+                  <label className="dash-acessos__check">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.cobrancas?.sem_caixa)}
+                      onChange={() => toggle('cobrancas', 'sem_caixa')}
+                    />
+                    <span>
+                      <strong>Sem caixa</strong>
+                      <small>Baixar pagamento sem lançar no fluxo de caixa</small>
                     </span>
                   </label>
                 </div>

@@ -181,8 +181,14 @@
   justify-content: center;
   text-align: center;
   opacity: 0.9;
-  font-size: 1.35rem;
   line-height: 1;
+  color: inherit;
+}
+
+.dash-menu__icon-svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
 }
 
 .dash-menu.active .dash-menu__icon {
@@ -804,6 +810,83 @@
   position: relative;
 }
 
+/* Mobile: todos os modais sobem como sheet do iPhone (fundo → ~meio/cima). */
+@media (max-width: 639px) {
+  .dash-modal-overlay,
+  .dash-modal-overlay--scrollable,
+  .dash-modal-overlay--pagamento,
+  .dash-modal-overlay--confirm,
+  .dash-modal-overlay--historico,
+  .dash-modal-overlay--catalogo,
+  .dash-modal-overlay--event-sheet,
+  .dash-atend-receipt-overlay {
+    align-items: flex-end !important;
+    justify-content: stretch;
+    padding: 0 !important;
+  }
+
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet),
+  .dash-modal--narrow:not(.dash-event-sheet),
+  .dash-modal--caixa-lanc,
+  .dash-modal--acesso,
+  .dash-modal--orcamento,
+  .dash-modal--catalogo,
+  .dash-modal--historico,
+  .dash-modal--relatorio-pagos {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    max-height: min(88dvh, 92vh) !important;
+    margin: 0 !important;
+    border-radius: 16px 16px 0 0 !important;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.14);
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Indicador visual de sheet (grabber). */
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet)::before {
+    content: '';
+    display: block;
+    width: 2.25rem;
+    height: 0.28rem;
+    margin: 0 auto 0.85rem;
+    border-radius: 999px;
+    background: #d5cdc4;
+    flex-shrink: 0;
+  }
+
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet) .dash-form-actions,
+  .dash-modal--catalogo .dash-form-actions,
+  .dash-modal--orcamento .dash-form-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.15rem;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0), #fff 28%);
+  }
+
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet) .dash-form-actions {
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet) .dash-form-actions .dash-btn-primary,
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet) .dash-form-actions .dash-btn-secondary,
+  .dash-modal-overlay .dash-modal:not(.dash-event-sheet) .dash-form-actions .dash-btn-danger {
+    width: 100%;
+    min-height: 44px;
+  }
+}
+
 .dash-modal__head {
   display: flex;
   align-items: flex-start;
@@ -986,12 +1069,13 @@
 @media (max-width: 980px) {
   .dash-page {
     display: block;
-    --dash-bottom-nav-h: 3.75rem;
-    --dash-mobile-footer-h: 2.5rem;
+    --dash-bottom-nav-h: 4.15rem;
+    --dash-mobile-footer-h: 2.4rem;
     --dash-mobile-chrome: calc(
       var(--dash-bottom-nav-h) + var(--dash-mobile-footer-h) +
         env(safe-area-inset-bottom, 0px)
     );
+    scroll-padding-bottom: var(--dash-mobile-chrome);
   }
 
   .dash-hamburger {
@@ -1075,7 +1159,17 @@
   .dash-content {
     margin-left: 0;
     transition: none;
-    padding-bottom: calc(var(--dash-mobile-chrome) + 0.75rem);
+    /* Espaço real via ::after — mais confiável que só padding no iOS. */
+    padding-bottom: 0.75rem;
+  }
+
+  .dash-content::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: calc(var(--dash-mobile-chrome) + 1.25rem);
+    flex-shrink: 0;
+    pointer-events: none;
   }
 
   .dash-content.dash-content--sidebar-expanded,
@@ -1127,21 +1221,19 @@
     margin-bottom: 0.8rem;
   }
 
-  /* Barra inferior: Inicio / Agenda / Atrasados / Mais */
+  /* Barra inferior: tabs no fundo absoluto (iPhone) + safe area */
   nav.dash-bottom-nav {
     display: flex !important;
     position: fixed !important;
     left: 0;
     right: 0;
-    bottom: calc(
-      var(--dash-mobile-footer-h) + env(safe-area-inset-bottom, 0px)
-    );
-    z-index: 28;
-    height: var(--dash-bottom-nav-h);
+    bottom: 0;
+    z-index: 30;
+    height: calc(var(--dash-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    padding: 0 0.25rem env(safe-area-inset-bottom, 0px);
     background: #fff;
     border-top: 1px solid #e8e2dc;
     box-shadow: 0 -4px 18px rgb(0 0 0 / 6%);
-    padding: 0 0.25rem;
     align-items: stretch;
     justify-content: space-around;
     margin: 0;
@@ -1185,18 +1277,16 @@
     transform: translateY(-1px);
   }
 
-  /* Footer inferior: Tutorial */
+  /* Tutorial logo acima da tab bar (não por baixo dela) */
   footer.dash-mobile-footer {
     display: flex !important;
     position: fixed !important;
     left: 0;
     right: 0;
-    bottom: 0;
-    z-index: 28;
-    height: calc(
-      var(--dash-mobile-footer-h) + env(safe-area-inset-bottom, 0px)
-    );
-    padding: 0 0.75rem env(safe-area-inset-bottom, 0px);
+    bottom: calc(var(--dash-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
+    z-index: 29;
+    height: var(--dash-mobile-footer-h);
+    padding: 0 0.75rem;
     align-items: center;
     justify-content: center;
     background: #f7f5f3;
@@ -1254,7 +1344,13 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding-bottom: calc(var(--dash-mobile-chrome) + 0.5rem);
+    padding-bottom: 0;
+  }
+
+  body[data-mensalidades="1"] .dash-content::after {
+    content: none;
+    display: none;
+    height: 0;
   }
 
   body[data-mensalidades="1"] .dash-content > .dash-screen-keepalive:not([hidden]) {
@@ -1263,6 +1359,53 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-bottom: calc(var(--dash-mobile-chrome) + 0.75rem);
+    box-sizing: border-box;
+  }
+
+  /* FAB Voltar/Salvar da ficha: acima da tab bar + tutorial */
+  .dash-membro-fab {
+    left: 0.65rem;
+    right: 0.65rem;
+    bottom: calc(var(--dash-mobile-chrome) + 0.45rem);
+    width: auto;
+    max-width: none;
+    justify-content: stretch;
+  }
+
+  .dash-membro-fab .dash-btn-secondary,
+  .dash-membro-fab .dash-btn-primary {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  body[data-ficha-membro='1'] .dash-member-form--with-fab,
+  .dash-member-form--with-fab {
+    padding-bottom: calc(var(--dash-mobile-chrome) + 5.75rem);
+  }
+
+  body[data-ficha-membro='1'] .dash-content::after {
+    height: calc(var(--dash-mobile-chrome) + 0.5rem);
+  }
+
+  .dash-pagination {
+    margin-bottom: 0.35rem;
+    padding-bottom: 0.25rem;
+  }
+
+  .dash-overview {
+    margin-bottom: 0.25rem;
+  }
+
+  .dash-aniversarios-list li {
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .dash-aniversarios-list__detalhe {
+    max-width: 48%;
+    white-space: normal;
+    line-height: 1.25;
   }
 }
 
@@ -1741,7 +1884,9 @@
   border-radius: 10px;
   padding: 1rem;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  overflow-x: clip;
 }
 
 .dash-form-section__title {
@@ -1799,6 +1944,7 @@
 .dash-field textarea,
 .dash-field select {
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   border: 1px solid #c9c4bf;
   border-radius: 8px;
@@ -1806,6 +1952,148 @@
   font-size: 0.95rem;
   font-family: inherit;
   min-height: var(--dash-control-h, 44px);
+}
+
+/* iOS/WebKit: date/datetime têm min-width intrínseco e vazam do card. */
+.dash-field:has(> input[type='date']),
+.dash-field:has(> input[type='datetime-local']),
+.dash-field:has(> input[type='time']),
+.dash-field:has(> input[type='month']),
+.dash-mens__field:has(> input[type='date']),
+.dash-event-sheet__field:has(> input[type='date']),
+.dash-event-sheet__field:has(> input[type='datetime-local']) {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.dash-field input[type='date'],
+.dash-field input[type='datetime-local'],
+.dash-field input[type='time'],
+.dash-field input[type='month'],
+.dash-mens__field input[type='date'],
+.dash-event-sheet__field input[type='date'],
+.dash-event-sheet__field input[type='datetime-local'],
+.dash-cob input[type='date'],
+.dash-panel-slide input[type='date'],
+input[type='date'],
+input[type='datetime-local'],
+input[type='time'],
+input[type='month'] {
+  display: block;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  -webkit-appearance: none;
+  appearance: none;
+  line-height: 1.25;
+}
+
+.dash-field input[type='date']::-webkit-date-and-time-value,
+.dash-event-sheet__field input[type='datetime-local']::-webkit-date-and-time-value,
+input[type='date']::-webkit-date-and-time-value,
+input[type='datetime-local']::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/*
+ * Safari iPhone: o edit interno do date força largura e corta o card.
+ * @supports (-webkit-touch-callout) ≈ iOS.
+ */
+@supports (-webkit-touch-callout: none) {
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'],
+  input[type='month'],
+  .dash-field input[type='date'],
+  .dash-field input[type='datetime-local'],
+  .dash-mens__field input[type='date'],
+  .dash-event-sheet__field input[type='date'],
+  .dash-event-sheet__field input[type='datetime-local'] {
+    font-size: 16px !important; /* evita zoom + layout mais estável */
+    min-height: 44px;
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
+  input[type='date']::-webkit-datetime-edit,
+  input[type='datetime-local']::-webkit-datetime-edit,
+  input[type='time']::-webkit-datetime-edit,
+  input[type='month']::-webkit-datetime-edit {
+    display: inline-flex;
+    min-width: 0 !important;
+    max-width: 100%;
+    width: auto;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  input[type='date']::-webkit-datetime-edit-fields-wrapper,
+  input[type='datetime-local']::-webkit-datetime-edit-fields-wrapper {
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  input[type='date']::-webkit-datetime-edit-text,
+  input[type='date']::-webkit-datetime-edit-month-field,
+  input[type='date']::-webkit-datetime-edit-day-field,
+  input[type='date']::-webkit-datetime-edit-year-field,
+  input[type='datetime-local']::-webkit-datetime-edit-text,
+  input[type='datetime-local']::-webkit-datetime-edit-month-field,
+  input[type='datetime-local']::-webkit-datetime-edit-day-field,
+  input[type='datetime-local']::-webkit-datetime-edit-year-field,
+  input[type='datetime-local']::-webkit-datetime-edit-hour-field,
+  input[type='datetime-local']::-webkit-datetime-edit-minute-field,
+  input[type='datetime-local']::-webkit-datetime-edit-ampm-field {
+    padding: 0 0.05rem;
+  }
+
+  input[type='date']::-webkit-calendar-picker-indicator,
+  input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    margin: 0 0 0 0.15rem;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  /* Exus/Umbanda: data não pode ter largura fixa no iPhone */
+  .dash-dynamic-block--compact .dash-field--date-compact {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden;
+  }
+
+  .dash-dynamic-block--compact .dash-field--date-compact input[type='date'] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Compromisso: Início/Fim nunca lado a lado no iPhone */
+  .dash-event-sheet__row {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Mensalidades: data em linha inteira */
+  .dash-mens__field--pagamento {
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .dash-form-section,
+  .dash-member-form,
+  .dash-pessoais-row--2,
+  .dash-pessoais-row--3,
+  .dash-form-grid {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
 }
 
 .dash-field input[type="checkbox"],
@@ -1982,8 +2270,10 @@
 }
 
 .dash-dynamic-block--compact .dash-field--date-compact {
-  flex: 0 0 11.5rem;
+  flex: 0 1 11.5rem;
   width: 11.5rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .dash-dynamic-block__actions {
@@ -2058,6 +2348,7 @@
   background: #fff;
   border: 1px solid #e1d9d1;
   box-shadow: 0 10px 28px rgba(42, 33, 26, 0.18);
+  box-sizing: border-box;
 }
 
 .dash-membro-fab .dash-btn-secondary,
@@ -2080,11 +2371,12 @@ body[data-ficha-membro="1"] .dash-scroll-top {
 @media (max-width: 720px) {
   .dash-dynamic-block--compact {
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "drag name remove"
       "drag date move";
     align-items: end;
+    column-gap: 0.45rem;
   }
   .dash-dynamic-block--compact .dash-drag-handle {
     grid-area: drag;
@@ -2094,11 +2386,20 @@ body[data-ficha-membro="1"] .dash-scroll-top {
   .dash-dynamic-block--compact .dash-field--inline-grow {
     grid-area: name;
     max-width: none;
+    min-width: 0;
   }
   .dash-dynamic-block--compact .dash-field--date-compact {
     grid-area: date;
     width: auto;
+    max-width: 100%;
+    min-width: 0;
     flex: none;
+    overflow: hidden;
+  }
+  .dash-dynamic-block--compact .dash-field--date-compact input {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
   }
   .dash-dynamic-block--compact .dash-dynamic-block__move {
     grid-area: move;
@@ -2611,7 +2912,31 @@ body[data-ficha-membro="1"] .dash-scroll-top {
 
 @media (max-width: 767px) {
   .dash-panel-slide {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
     width: 100%;
+    height: auto;
+    max-height: min(88dvh, 92vh);
+    border-radius: 16px 16px 0 0;
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.14);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dash-panel-slide__inner {
+    padding: 0.35rem 1rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dash-panel-slide__inner::before {
+    content: '';
+    display: block;
+    width: 2.25rem;
+    height: 0.28rem;
+    margin: 0.35rem auto 0.85rem;
+    border-radius: 999px;
+    background: #d5cdc4;
   }
 }
 
@@ -3188,15 +3513,6 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 }
 
 @media (max-width: 420px) {
-  .dash-modal--historico {
-    width: 100%;
-    max-width: 100%;
-    max-height: none;
-    min-height: 100%;
-    border-radius: 0;
-    padding: 0.85rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
-  }
-
   .dash-hist-list {
     gap: 0.45rem;
   }
@@ -3217,11 +3533,6 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 
   .dash-hist-item__top {
     flex-wrap: wrap;
-  }
-
-  .dash-modal-overlay--historico {
-    align-items: stretch;
-    padding: 0;
   }
 }
 
@@ -3586,20 +3897,6 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 }
 
 @media (max-width: 520px) {
-  .dash-modal-overlay--catalogo {
-    align-items: stretch;
-    padding: 0;
-  }
-
-  .dash-modal--catalogo {
-    width: 100%;
-    max-width: 100%;
-    max-height: none;
-    min-height: 100%;
-    border-radius: 0;
-    padding: 0.85rem 0.85rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
-  }
-
   .dash-modal--catalogo .dash-form-actions {
     flex-direction: column-reverse;
     align-items: stretch;
@@ -4600,6 +4897,8 @@ th[aria-sort="descending"] .dash-th-sort__icons {
 .dash-event-sheet__field select,
 .dash-event-sheet__textarea {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: var(--dash-control-h, 44px);
   border: 1px solid #c9c4bf;
   border-radius: 8px;
@@ -4609,6 +4908,21 @@ th[aria-sort="descending"] .dash-th-sort__icons {
   font-size: 0.95rem;
   color: #2a211a;
   box-sizing: border-box;
+}
+
+@media (max-width: 520px) {
+  .dash-event-sheet__row {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-event-sheet {
+    max-height: min(94dvh, 100%);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .dash-event-sheet__body {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 .dash-event-sheet__textarea {
@@ -5086,6 +5400,16 @@ th[aria-sort="descending"] .dash-th-sort__icons {
   display: grid;
   gap: 0.75rem;
   grid-template-columns: 1fr;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.dash-pessoais-row--3 > .dash-field,
+.dash-pessoais-row--2 > .dash-field,
+.dash-form-grid > .dash-field {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .dash-orumale-row4 {
@@ -7124,6 +7448,12 @@ body[data-mensalidades='1'] .dash-mens__legend {
   flex-shrink: 0;
 }
 
+body[data-mensalidades='1'] .dash-mens__toolbar {
+  overflow: visible;
+  position: relative;
+  z-index: 6;
+}
+
 body[data-mensalidades='1'] .dash-mens__scroll {
   flex: 1 1 auto;
   min-height: 0;
@@ -7142,6 +7472,7 @@ body[data-mensalidades='1'] .dash-mens__cards {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  padding-bottom: 0.75rem;
 }
 
 .dash-mens__header {
@@ -7809,9 +8140,23 @@ body[data-mensalidades='1'] .dash-mens__cards {
   .dash-mens__field--ano,
   .dash-mens__field--pagamento,
   .dash-mens__field--tipo {
-    flex: 1 1 calc(33.333% - 0.5rem);
+    flex: 1 1 calc(50% - 0.35rem);
     width: auto;
-    min-width: 6.5rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .dash-mens__field--pagamento {
+    flex: 1 1 100%;
+    order: 2;
+  }
+
+  .dash-mens__field--ano {
+    order: 1;
+  }
+
+  .dash-mens__field--tipo {
+    order: 1;
   }
 
   .dash-mens__field--busca {
@@ -7826,6 +8171,7 @@ body[data-mensalidades='1'] .dash-mens__cards {
   .dash-mens__field--ano .dash-searchable-select {
     width: 100%;
     min-width: 0;
+    max-width: 100%;
   }
 
   .dash-mens__filters .dash-mens__field .dash-ss,

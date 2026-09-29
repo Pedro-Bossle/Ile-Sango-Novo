@@ -13,6 +13,8 @@ export type MensalidadeRow = {
   data_pagamento: string | null;
   forma_pagamento: string | null;
   obs: string | null;
+  /** Se true, pagamento não gera lançamento no fluxo de caixa. */
+  sem_caixa?: boolean;
 };
 
 export type MembroMensalidade = {
@@ -140,7 +142,7 @@ export async function fetchMembrosMensalidade(): Promise<MembroMensalidade[]> {
 export async function fetchMensalidadesAno(ano: number): Promise<MensalidadeRow[]> {
   const { data, error } = await supabase
     .from('mensalidades')
-    .select('id, pessoa_id, ano, mes, status, valor, data_pagamento, forma_pagamento, obs')
+    .select('id, pessoa_id, ano, mes, status, valor, data_pagamento, forma_pagamento, obs, sem_caixa')
     .eq('ano', ano);
   if (error) throw new Error(error.message);
   return ((data ?? []) as MensalidadeRow[]).map((r) => ({
@@ -276,6 +278,8 @@ export async function setMensalidadeStatus(input: {
   valor: number;
   data_pagamento?: string | null;
   forma_pagamento?: string | null;
+  /** Pago sem lançar no fluxo de caixa (requer permissão). */
+  sem_caixa?: boolean;
 }): Promise<string> {
   const payload = {
     pessoa_id: input.pessoa_id,
@@ -285,6 +289,7 @@ export async function setMensalidadeStatus(input: {
     valor: input.valor,
     data_pagamento: input.status === 'pago' ? input.data_pagamento || new Date().toISOString().slice(0, 10) : null,
     forma_pagamento: input.status === 'pago' ? input.forma_pagamento || 'Pix' : null,
+    sem_caixa: input.status === 'pago' ? Boolean(input.sem_caixa) : false,
     updated_at: new Date().toISOString(),
   };
 

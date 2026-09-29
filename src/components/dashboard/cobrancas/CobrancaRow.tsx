@@ -91,17 +91,19 @@ export function CobrancaRow({
           <p className="dash-cob-item__valores">
             {money(pago)} de {money(total)} — resta {money(saldo)}
           </p>
-          <div
-            className="dash-cob-item__bar"
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${pct}% quitado`}
-          >
-            <div className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+          <div className="dash-cob-item__progress">
+            <div
+              className="dash-cob-item__bar"
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`${pct}% quitado`}
+            >
+              <div className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+            </div>
+            <span className="dash-cob-item__pct">{pct}% quitado</span>
           </div>
-          <p className="dash-cob-item__pct">{pct}% quitado</p>
         </div>
 
         <div className="dash-cob-item__side">
@@ -116,7 +118,7 @@ export function CobrancaRow({
             {pendente && (
               <button
                 type="button"
-                className="dash-cob-icon-btn"
+                className="dash-cob-icon-btn dash-cob-icon-btn--pay"
                 onClick={() => setRegistrarOpen(true)}
                 title="Registrar pagamento"
                 aria-label="Registrar pagamento"

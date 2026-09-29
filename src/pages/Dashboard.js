@@ -787,21 +787,41 @@ const Dashboard = () => {
     );
   }
 
-  const MENU_ICONS = {
-    'visao-geral': '⌂',
-    eventos: '▦',
-    catalogo: '☰',
-    membros: '☺',
-    cobrancas: '◈',
-    mensalidades: '▦',
-    atrasados: '⚠',
-    caixa: '◇',
-    clientes: '◎',
-    agenda: '▣',
-    'dados-ile': '◈',
-    orixas: '✶',
-    acessos: '⚙',
+  const MENU_ICON_PATHS = {
+    'visao-geral': 'M12 3.2 3.5 10.5V21h6.2v-5.5h4.6V21h6.2V10.5L12 3.2Z',
+    eventos:
+      'M7 3h2v2h6V3h2v2h3v16H4V5h3V3Zm11 6H6v10h12V9Zm-8 2h2v2H10v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H10v-2Zm4 0h2v2h-2v-2Z',
+    agenda:
+      'M7 3h2v2h6V3h2v2h3v16H4V5h3V3Zm11 6H6v10h12V9Zm-8 2h2v2H10v-2Zm4 0h2v2h-2v-2Zm-4 4h2v2H10v-2Zm4 0h2v2h-2v-2Z',
+    catalogo: 'M4 6h16v2H4V6Zm0 5h16v2H4v-2Zm0 5h16v2H4v-2Z',
+    membros:
+      'M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Zm0 2c-3.8 0-7 1.9-7 4.2V20h14v-1.8C19 15.9 15.8 14 12 14Z',
+    cobrancas:
+      'M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5v-11ZM8 8h8v1.5H8V8Zm0 3.5h8V13H8v-1.5Zm0 3.5h5V17H8v-1.5Z',
+    mensalidades:
+      'M7 3h10a2 2 0 0 1 2 2v14l-7-3.2L5 19V5a2 2 0 0 1 2-2Zm0 2v11.2l5-2.3 5 2.3V5H7Z',
+    atrasados: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 14h-2v-2h2v2Zm0-4h-2V7h2v5Z',
+    caixa:
+      'M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9ZM5.5 7a.5.5 0 0 0-.5.5V9h16V7.5a.5.5 0 0 0-.5-.5h-15ZM21 11H3v5.5a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5V11Z',
+    clientes:
+      'M9 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 9 11Zm6 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM9 13c-3.1 0-5.5 1.5-5.5 3.3V18h11v-1.7C14.5 14.5 12.1 13 9 13Zm6.2.2c.3 0 .5 0 .8.05 2.2.4 3.5 1.5 3.5 2.9V18H16v-1.5c0-1.1-.5-2-1.3-2.7.2-.2.5-.4.9-.6Z',
+    'dados-ile':
+      'M12 2 4 5v6.5c0 4.8 3.3 9.2 8 10.5 4.7-1.3 8-5.7 8-10.5V5l-8-3Zm0 2.1 6 2.25V11.5c0 3.7-2.5 7.1-6 8.3-3.5-1.2-6-4.6-6-8.3V6.35L12 4.1Z',
+    orixas:
+      'M12 2.5 13.8 8H19l-4.1 3 1.6 5.5L12 13.8 7.5 16.5 9.1 11 5 8h5.2L12 2.5Z',
+    acessos:
+      'M12 1.8a4.2 4.2 0 0 0-1.3 8.2V12H8v2.2h2.7V17H13v-2.8h2.7V12H13v-2a4.2 4.2 0 0 0-1-8.2Zm0 2a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4Z',
+    financeiro:
+      'M12 2.8 3.8 6.5v5.2c0 4.6 3.2 8.9 8.2 10.1 5-1.2 8.2-5.5 8.2-10.1V6.5L12 2.8Zm0 2.2 6.2 2.8v4.7c0 3.4-2.3 6.5-6.2 7.6-3.9-1.1-6.2-4.2-6.2-7.6V7.8L12 5Z',
+    config:
+      'M19.4 13a7.7 7.7 0 0 0 .1-1 7.7 7.7 0 0 0-.1-1l2-1.6-1.9-3.3-2.4 1a7.4 7.4 0 0 0-1.7-1L15 2.5h-3.8l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.4-1L4.8 8.4 6.8 10a7.7 7.7 0 0 0-.1 1 7.7 7.7 0 0 0 .1 1l-2 1.6 1.9 3.3 2.4-1a7.4 7.4 0 0 0 1.7 1l.4 2.6H15l.4-2.6a7.4 7.4 0 0 0 1.7-1l2.4 1 1.9-3.3-2-1.6ZM12 15.2A3.2 3.2 0 1 1 15.2 12 3.2 3.2 0 0 1 12 15.2Z',
   };
+
+  const menuIcon = (id) => (
+    <svg className="dash-menu__icon-svg" viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path fill="currentColor" d={MENU_ICON_PATHS[id] || MENU_ICON_PATHS['visao-geral']} />
+    </svg>
+  );
 
   const menuBtn = (id, label, tour, { child = false } = {}) => {
     if (id === 'eventos') {
@@ -819,7 +839,7 @@ const Dashboard = () => {
         onClick={() => goMenu(id)}
       >
         <span className="dash-menu__icon" aria-hidden>
-          {MENU_ICONS[id] || '•'}
+          {menuIcon(id)}
         </span>
         <span className="dash-sidebar-label">{label}</span>
       </button>
@@ -906,7 +926,7 @@ const Dashboard = () => {
                 onClick={() => abrirGrupo('fin')}
               >
                 <span className="dash-menu__icon" aria-hidden>
-                  ◈
+                  {menuIcon('financeiro')}
                 </span>
                 <span className="dash-sidebar-label dash-menu-group__label">Financeiro</span>
                 <span className="dash-menu-group__chevron" aria-hidden>
@@ -941,7 +961,7 @@ const Dashboard = () => {
                 onClick={() => abrirGrupo('cfg')}
               >
                 <span className="dash-menu__icon" aria-hidden>
-                  ⚙
+                  {menuIcon('config')}
                 </span>
                 <span className="dash-sidebar-label dash-menu-group__label">Configurações</span>
                 <span className="dash-menu-group__chevron" aria-hidden>
@@ -1502,6 +1522,7 @@ const Dashboard = () => {
             <MensalidadesScreen
               canEdit={pode('cobrancas', 'u') || pode('cobrancas', 'c') || pode('cobrancas', 'pagar')}
               canLote={pode('cobrancas', 'lote')}
+              canSemCaixa={pode('cobrancas', 'sem_caixa')}
             />
           </div>
         )}

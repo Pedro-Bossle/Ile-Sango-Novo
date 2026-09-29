@@ -161,17 +161,19 @@ export function CobrancaMembroCard({
             <span className="dash-cob-group__valores">
               {money(totals.pago)} de {money(totals.total)} — resta {money(totals.saldo)}
             </span>
-            <span
-              className="dash-cob-item__bar"
-              role="progressbar"
-              aria-valuenow={totals.pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={`${totals.pct}% quitado`}
-            >
-              <span className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, totals.pct)}%` }} />
+            <span className="dash-cob-item__progress">
+              <span
+                className="dash-cob-item__bar"
+                role="progressbar"
+                aria-valuenow={totals.pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={`${totals.pct}% quitado`}
+              >
+                <span className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, totals.pct)}%` }} />
+              </span>
+              <span className="dash-cob-item__pct">{totals.pct}% quitado</span>
             </span>
-            <span className="dash-cob-item__pct">{totals.pct}% quitado</span>
           </span>
           <span className={`dash-cob-status dash-cob-status--${status.key}`}>{status.label}</span>
         </button>

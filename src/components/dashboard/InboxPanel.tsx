@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   aprovarPendente,
   fetchNotificacoes,
@@ -9,6 +9,8 @@ import {
   type CadastroPendente,
   type DashboardNotificacao,
 } from '../../services/membroCadastro';
+import { labelOrixaCabeca } from '../../services/membros';
+import { fetchOrixas, fetchTodasQualidades } from '../../services/orixasQualidades';
 import { formatDateBR } from '../../utils/formatDate';
 import { Toast } from './Toast';
 import { useConfirmAction } from './ConfirmActionModal';
@@ -36,6 +38,19 @@ function formatWhen(iso: string) {
   }
 }
 
+function labelPar(
+  orixaId: string | null | undefined,
+  qualidadeId: string | number | null | undefined,
+  orixaNomeById: Map<string, string>,
+  qualidadeNomeById: Map<string, string>,
+): string {
+  const oid = String(orixaId ?? '').trim();
+  const qid = String(qualidadeId ?? '').trim();
+  const oNome = oid ? orixaNomeById.get(oid) ?? null : null;
+  const qNome = qid ? qualidadeNomeById.get(qid) ?? null : null;
+  return labelOrixaCabeca(oNome, qNome) || '—';
+}
+
 export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChange }: Props) {
   const [notifs, setNotifs] = useState<DashboardNotificacao[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,6 +58,8 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
   const [selected, setSelected] = useState<CadastroPendente | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
+  const [orixaNomeById, setOrixaNomeById] = useState<Map<string, string>>(() => new Map());
+  const [qualidadeNomeById, setQualidadeNomeById] = useState<Map<string, string>>(() => new Map());
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -59,6 +76,24 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
   useEffect(() => {
     if (open) void reload();
   }, [open, reload]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [orixas, qualidades] = await Promise.all([fetchOrixas(), fetchTodasQualidades()]);
+        if (cancelled) return;
+        setOrixaNomeById(new Map(orixas.map((o) => [String(o.id), o.nome])));
+        setQualidadeNomeById(new Map(qualidades.map((q) => [String(q.id), q.nome])));
+      } catch {
+        /* ignore — detalhe fica em — se mapas vazios */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const abrirItem = async (n: DashboardNotificacao) => {
     if (!n.lida) {
@@ -144,6 +179,17 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
     }
   };
 
+  const orisaLabels = useMemo(() => {
+    if (!selected?.payload?.cadastro) return null;
+    const cad = selected.payload.cadastro;
+    return {
+      cabeca: labelPar(cad.orixa_cabeca_id, cad.qualidade_cabeca_id, orixaNomeById, qualidadeNomeById),
+      corpo: labelPar(cad.orixa_corpo_id, cad.qualidade_corpo_id, orixaNomeById, qualidadeNomeById),
+      passagem: labelPar(cad.orixa_passagem_id, cad.qualidade_passagem_id, orixaNomeById, qualidadeNomeById),
+      saida: labelPar(cad.orixa_saida_id, cad.qualidade_saida_id, orixaNomeById, qualidadeNomeById),
+    };
+  }, [selected, orixaNomeById, qualidadeNomeById]);
+
   if (!open) return null;
 
   const payload = selected?.payload;
@@ -158,8 +204,14 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
         <header className="dash-inbox__head">
           <h2>Inbox</h2>
           <div className="dash-inbox__head-actions">
-            <button type="button" className="dash-add-button dash-add-button--secondary" disabled={busy} onClick={() => void limpar()}>
-              Limpar notificações
+            <button
+              type="button"
+              className="dash-add-button dash-add-button--secondary"
+              disabled={busy}
+              onClick={() => void limpar()}
+              title="Limpar notificações"
+            >
+              Limpar
             </button>
             <button type="button" className="dash-inbox__close" onClick={onClose} aria-label="Fechar">
               ×
@@ -190,7 +242,7 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
             {selected && (
               <>
                 <h3>{selected.nome}</h3>
-                <p className="dash-muted">
+                <p className="dash-muted dash-inbox__meta">
                   Status: {selected.status}
                   {selected.deleted_at ? ' (removido)' : ''} · Enviado em {formatWhen(selected.created_at)}
                 </p>
@@ -221,14 +273,14 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
                   </div>
                 </dl>
 
-                {cad && (
+                {cad && orisaLabels && (
                   <div className="dash-inbox__block">
-                    <h4>Orisás (IDs enviados)</h4>
+                    <h4>Orisás</h4>
                     <ul>
-                      <li>Cabeça: {cad.orixa_cabeca_id || '—'} / {cad.qualidade_cabeca_id || '—'}</li>
-                      <li>Corpo: {cad.orixa_corpo_id || '—'} / {cad.qualidade_corpo_id || '—'}</li>
-                      <li>Passagem: {cad.orixa_passagem_id || '—'} / {cad.qualidade_passagem_id || '—'}</li>
-                      <li>Saída: {cad.orixa_saida_id || '—'} / {cad.qualidade_saida_id || '—'}</li>
+                      <li>Cabeça: {orisaLabels.cabeca}</li>
+                      <li>Corpo: {orisaLabels.corpo}</li>
+                      <li>Passagem: {orisaLabels.passagem}</li>
+                      <li>Saída: {orisaLabels.saida}</li>
                     </ul>
                   </div>
                 )}
@@ -263,11 +315,16 @@ export function InboxPanel({ open, onClose, canReview, onApproved, onCountsChang
                   <div className="dash-inbox__block">
                     <h4>Orumalé</h4>
                     <ul>
-                      {payload.orumale.map((o, i) => (
-                        <li key={i}>
-                          Orisá {o.orixa_id || '—'} / {o.qualidade_id || '—'} {o.digina ? `· ${o.digina}` : ''}
-                        </li>
-                      ))}
+                      {payload.orumale.map((o, i) => {
+                        const nome = labelPar(o.orixa_id, o.qualidade_id, orixaNomeById, qualidadeNomeById);
+                        return (
+                          <li key={i}>
+                            {nome}
+                            {o.digina ? ` · ${o.digina}` : ''}
+                            {o.data_feitura ? ` (${formatDateBR(o.data_feitura)})` : ''}
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 )}

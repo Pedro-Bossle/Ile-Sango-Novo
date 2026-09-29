@@ -36,7 +36,7 @@ import {
 } from '../../../lib/formasPagamento';
 import './MensalidadesScreen.css';
 
-type Props = { canEdit?: boolean; canLote?: boolean };
+type Props = { canEdit?: boolean; canLote?: boolean; canSemCaixa?: boolean };
 
 type PopoverTarget = {
   pessoaId: string;
@@ -198,9 +198,8 @@ function IncluirMembroBar({
   );
 }
 
-export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
+export function MensalidadesScreen({ canEdit = true, canLote = false, canSemCaixa = false }: Props) {
   const yearNow = new Date().getFullYear();
-  const mesNow = new Date().getMonth() + 1;
   const [ano, setAno] = useState(yearNow);
   const [busca, setBusca] = useState('');
   const [dataPagamento, setDataPagamento] = useState(() => new Date().toISOString().slice(0, 10));
@@ -214,8 +213,8 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
   const [popover, setPopover] = useState<PopoverTarget | null>(null);
   const [incluirOpen, setIncluirOpen] = useState(false);
   const [incluirMembroId, setIncluirMembroId] = useState('');
-  const [bulkOpen, setBulkOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
+  const [baixarSemCaixa, setBaixarSemCaixa] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'nome', dir: 'asc' });
   const popRef = useRef<HTMLDivElement>(null);
   const extrasRef = useRef<HTMLDivElement>(null);
@@ -283,7 +282,6 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
     const onDoc = (ev: MouseEvent | TouchEvent) => {
       if (extrasRef.current?.contains(ev.target as Node)) return;
       setExtrasOpen(false);
-      setBulkOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('touchstart', onDoc);
@@ -292,6 +290,10 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
       document.removeEventListener('touchstart', onDoc);
     };
   }, [extrasOpen]);
+
+  useEffect(() => {
+    if (!canSemCaixa) setBaixarSemCaixa(false);
+  }, [canSemCaixa]);
 
   const filtrados = useMemo(() => {
     const q = busca.trim();
@@ -346,10 +348,8 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
   );
 
   const anoOptions = useMemo((): SearchableSelectOption[] => {
-    const anos: number[] = [];
-    for (let y = yearNow + 1; y >= yearNow - 5; y -= 1) anos.push(y);
-    return anos.map((y) => ({ value: String(y), label: String(y) }));
-  }, [yearNow]);
+    return [2027, 2026, 2025].map((y) => ({ value: String(y), label: String(y) }));
+  }, []);
 
   const incluirOptions = useMemo((): SearchableSelectOption[] => {
     const idsComLinha = new Set(rows.map((r) => r.pessoa_id));
@@ -361,8 +361,6 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
         label: idsComLinha.has(m.id) ? m.nome : `${m.nome} (novo no ano)`,
       }));
   }, [membros, ano, rows]);
-
-  const mesBulk = ano === yearNow ? mesNow : ano < yearNow ? 12 : 0;
 
   const textoLista = () => {
     const porNome = [...filtrados].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
@@ -384,7 +382,7 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
     status: MensalidadeStatus,
     valor: number,
   ): Promise<string> => {
-    // Caixa: trigger sync_mensalidade_to_caixa no banco ao marcar pago.
+    // Caixa: trigger sync_mensalidade_to_caixa no banco ao marcar pago (exceto sem_caixa).
     const rowId = await setMensalidadeStatus({
       pessoa_id: membro.id,
       ano,
@@ -393,13 +391,16 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
       valor,
       data_pagamento: status === 'pago' ? dataPagamento : null,
       forma_pagamento: status === 'pago' ? formaPagamento : null,
+      sem_caixa: status === 'pago' && canSemCaixa && baixarSemCaixa,
     });
 
     await writeAuditLog({
       action: 'update',
       entity: 'mensalidades',
       entity_id: rowId,
-      resumo: `${membro.nome} — ${MESES_LABEL[mes - 1]}/${ano}: ${status}`,
+      resumo: `${membro.nome} — ${MESES_LABEL[mes - 1]}/${ano}: ${status}${
+        status === 'pago' && canSemCaixa && baixarSemCaixa ? ' (sem caixa)' : ''
+      }`,
     });
 
     return rowId;
@@ -476,24 +477,40 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
     }
   };
 
-  const marcarMesAtualPagoFiltrados = async () => {
-    if (!canEdit || !mesBulk || saving) return;
-    setBulkOpen(false);
+  const aplicarLoteTodosMeses = async (status: MensalidadeStatus) => {
+    if (!canEdit || !canLote || saving) return;
+    setExtrasOpen(false);
     setSaving(true);
     try {
       let qtd = 0;
       for (const m of filtrados) {
         const cells = montarGradeMembro(m, ano, rows, valorPadrao);
-        const c = cells.find((x) => x.mes === mesBulk);
-        if (!c || c.status !== 'aberto') continue;
-        await persistStatus(m, mesBulk, 'pago', c.valor);
-        qtd += 1;
+        for (const c of cells) {
+          if (!celulaEditavel(c, canEdit)) continue;
+          if (c.status === status) continue;
+          if (c.status === 'vazio' || c.status === 'desligado') continue;
+          if (status === 'pago' && c.status !== 'aberto' && c.status !== 'isento') continue;
+          if (status === 'aberto' && c.status !== 'pago' && c.status !== 'isento') continue;
+          if (status === 'isento' && c.status !== 'aberto' && c.status !== 'pago') continue;
+          await persistStatus(m, c.mes, status, c.valor);
+          qtd += 1;
+        }
       }
       await reload({ silent: true });
       if (!qtd) {
-        setToast({ msg: 'Nenhuma célula em aberto neste mês (com os filtros atuais).', variant: 'error' });
+        setToast({
+          msg: 'Nenhuma célula elegível no ano (com os filtros atuais).',
+          variant: 'error',
+        });
       } else {
-        setToast({ msg: `${qtd} mensalidade(s) marcada(s) como paga(s).`, variant: 'success' });
+        const acao =
+          status === 'pago' ? 'paga(s)' : status === 'aberto' ? 'reaberta(s)' : 'isentada(s)';
+        setToast({
+          msg: `${qtd} mensalidade(s) ${acao}${
+            status === 'pago' && canSemCaixa && baixarSemCaixa ? ' sem caixa' : ''
+          }.`,
+          variant: 'success',
+        });
       }
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro na ação em lote.', variant: 'error' });
@@ -624,34 +641,47 @@ export function MensalidadesScreen({ canEdit = true, canLote = false }: Props) {
               className={`dash-add-button dash-add-button--secondary${extrasOpen ? ' is-open' : ''}`}
               aria-expanded={extrasOpen}
               aria-haspopup="true"
-              onClick={() => {
-                setExtrasOpen((v) => !v);
-                setBulkOpen(false);
-              }}
+              onClick={() => setExtrasOpen((v) => !v)}
             >
               Opções
             </button>
             {extrasOpen && (
               <div className="dash-mens__extras-menu" role="menu">
+                {canSemCaixa && (
+                  <label className="dash-mens__extras-check">
+                    <input
+                      type="checkbox"
+                      checked={baixarSemCaixa}
+                      onChange={(e) => setBaixarSemCaixa(e.target.checked)}
+                    />
+                    <span>Baixar sem caixa</span>
+                  </label>
+                )}
                 <div className="dash-mens__extras-lote">
                   <button
                     type="button"
-                    className="dash-add-button dash-add-button--secondary"
-                    disabled={!mesBulk || saving}
-                    onClick={() => setBulkOpen((v) => !v)}
+                    className="dash-mens__extras-lote-action dash-add-button dash-add-button--secondary"
+                    disabled={saving}
+                    onClick={() => void aplicarLoteTodosMeses('pago')}
                   >
-                    Lote
+                    Pagar todas
                   </button>
-                  {bulkOpen && mesBulk > 0 && (
-                    <button
-                      type="button"
-                      className="dash-mens__extras-lote-action"
-                      disabled={saving}
-                      onClick={() => void marcarMesAtualPagoFiltrados()}
-                    >
-                      Pagar {MESES_LABEL[mesBulk - 1]}
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="dash-mens__extras-lote-action dash-add-button dash-add-button--secondary"
+                    disabled={saving}
+                    onClick={() => void aplicarLoteTodosMeses('aberto')}
+                  >
+                    Abrir todas
+                  </button>
+                  <button
+                    type="button"
+                    className="dash-mens__extras-lote-action dash-add-button dash-add-button--secondary"
+                    disabled={saving}
+                    onClick={() => void aplicarLoteTodosMeses('isento')}
+                  >
+                    Isentar todas
+                  </button>
                 </div>
               </div>
             )}
