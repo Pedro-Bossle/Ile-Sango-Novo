@@ -1,4 +1,4 @@
-/** Recursos e permissões CRUD (+ send / excel / pagar / restaurar). */
+/** Recursos e permissões CRUD (+ send / excel / pagar / lote / sem_caixa / restaurar). */
 
 export type PermFlags = {
   c?: boolean;
@@ -8,6 +8,10 @@ export type PermFlags = {
   s?: boolean;
   excel?: boolean;
   pagar?: boolean;
+  /** Mensalidades: pagar mês em lote (independente de admin). */
+  lote?: boolean;
+  /** Mensalidades: registrar pagamento sem lançar no caixa (independente de admin). */
+  sem_caixa?: boolean;
 };
 
 export type ResourceKey =
@@ -30,10 +34,10 @@ export const RESOURCE_LABELS: Record<ResourceKey, string> = {
   eventos: 'Agenda — eventos da casa',
   catalogo: 'Catálogo',
   membros: 'Membros',
-  cobrancas: 'Obrigações',
+  cobrancas: 'Cobranças / Mensalidades',
   caixa: 'Fluxo de caixa',
   clientes: 'Clientes',
-  orcamentos: 'Orçamentos',
+  orcamentos: 'Vendas (ficha do cliente)',
   agenda: 'Agenda — compromissos',
   dados_ile: 'Dados do Ilê',
   orixas: 'Orixás',
@@ -49,7 +53,7 @@ export const RESOURCE_ACTIONS: Record<ResourceKey, (keyof PermFlags)[]> = {
   eventos: ['c', 'r', 'u', 'd'],
   catalogo: ['c', 'r', 'u', 'd'],
   membros: ['c', 'r', 'u', 'd'],
-  cobrancas: ['c', 'r', 'u', 'd', 's'],
+  cobrancas: ['c', 'r', 'u', 'd', 's', 'lote', 'sem_caixa'],
   caixa: ['c', 'r', 'u', 'd'],
   clientes: ['c', 'r', 'u', 'd', 's'],
   orcamentos: ['c', 'r', 'u', 'd', 's'],
@@ -80,6 +84,7 @@ export function fullPermissions(): PermissionsMap {
     eventos: { c: true, r: true, u: true, d: true, s: false },
     catalogo: { c: true, r: true, u: true, d: true, s: false },
     membros: { c: true, r: true, u: true, d: true, s: false, excel: true },
+    // lote / sem_caixa NÃO vêm com admin — são marcados à parte no menu de permissões
     cobrancas: { c: true, r: true, u: true, d: true, s: true, pagar: true },
     caixa: { c: true, r: true, u: true, d: true, s: false },
     clientes: { c: true, r: true, u: true, d: true, s: true },
@@ -89,6 +94,21 @@ export function fullPermissions(): PermissionsMap {
     orixas: { c: true, r: true, u: true, d: true, s: false },
     acessos: { c: true, r: true, u: true, d: true, s: false },
     restaurar: { c: false, r: true, u: true, d: false, s: false },
+  };
+}
+
+/** Preserva flags de mensalidades que não seguem o atalho de administrador. */
+export function mergeMensalidadeExtras(
+  base: PermissionsMap,
+  extras?: PermFlags | null,
+): PermissionsMap {
+  return {
+    ...base,
+    cobrancas: {
+      ...(base.cobrancas ?? {}),
+      lote: Boolean(extras?.lote),
+      sem_caixa: Boolean(extras?.sem_caixa),
+    },
   };
 }
 
@@ -129,7 +149,10 @@ export const PERMISSION_PRESETS: Record<string, PermissionsMap> = {
   },
 };
 
-export type PermAction = 'c' | 'r' | 'u' | 'd' | 's' | 'excel' | 'pagar';
+export type PermAction = 'c' | 'r' | 'u' | 'd' | 's' | 'excel' | 'pagar' | 'lote' | 'sem_caixa';
+
+/** Flags que não acompanham “administrador total” — só o checkbox explícito. */
+const ADMIN_INDEPENDENT: ReadonlySet<PermAction> = new Set(['lote', 'sem_caixa']);
 
 export function can(
   isAdmin: boolean,
@@ -137,6 +160,9 @@ export function can(
   resource: ResourceKey,
   action: PermAction,
 ): boolean {
+  if (ADMIN_INDEPENDENT.has(action)) {
+    return Boolean(permissions?.[resource]?.[action]);
+  }
   if (isAdmin) return true;
   const flags = permissions?.[resource];
   if (!flags) return false;

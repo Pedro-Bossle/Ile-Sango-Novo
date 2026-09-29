@@ -1,0 +1,230 @@
+/* Inbox — trigger (visão geral) + painel lateral */
+
+.dash-visao-head {
+  align-items: flex-start;
+}
+
+.dash-visao-head .dash-page-head__actions {
+  align-items: center;
+}
+
+.dash-content-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.35rem;
+  min-height: 0;
+}
+
+.dash-inbox-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #c9c4bf;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--bordo, #530526);
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+.dash-inbox-trigger__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
+}
+
+.dash-inbox-trigger:hover {
+  border-color: var(--bordo, #530526);
+  background: color-mix(in srgb, var(--bordo, #530526) 6%, #fff);
+}
+
+.dash-inbox-badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: var(--bordo, #530526);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dash-inbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 20, 16, 0.35);
+  z-index: 80;
+}
+
+.dash-inbox {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(920px, 100vw);
+  height: 100vh;
+  height: 100dvh;
+  background: #faf8f6;
+  border-left: 1px solid #e1d9d1;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.12);
+}
+
+.dash-inbox__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #e8e0d8;
+  background: #fff;
+}
+
+.dash-inbox__head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--bordo, #530526);
+}
+
+.dash-inbox__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.dash-inbox__close {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #5c534c;
+  appearance: none;
+}
+
+.dash-inbox__close:hover {
+  background: #f5f0ec;
+  color: var(--bordo, #530526);
+}
+
+.dash-inbox__body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) 1.4fr;
+  min-height: 0;
+}
+
+.dash-inbox__list {
+  overflow: auto;
+  border-right: 1px solid #e8e0d8;
+  background: #fff;
+  padding: 0.5rem;
+}
+
+.dash-inbox__item {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.75rem;
+  margin-bottom: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #f7f3ef;
+  font: inherit;
+  cursor: pointer;
+  appearance: none;
+}
+
+.dash-inbox__item.is-unread {
+  border-color: color-mix(in srgb, var(--bordo, #530526) 35%, #e8e0d8);
+  background: color-mix(in srgb, var(--bordo, #530526) 6%, #fff);
+}
+
+.dash-inbox__item strong {
+  font-size: 0.92rem;
+  color: #1a1512;
+}
+
+.dash-inbox__item span,
+.dash-inbox__item time {
+  font-size: 0.8rem;
+  color: #6b5f55;
+}
+
+.dash-inbox__detail {
+  overflow: auto;
+  padding: 1rem 1.15rem 1.5rem;
+}
+
+.dash-inbox__detail h3 {
+  margin: 0 0 0.35rem;
+  color: var(--bordo, #530526);
+}
+
+.dash-inbox__dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 1rem;
+  margin: 0.85rem 0;
+}
+
+.dash-inbox__dl dt {
+  font-size: 0.75rem;
+  color: #6b5f55;
+}
+
+.dash-inbox__dl dd {
+  margin: 0.1rem 0 0;
+  color: #1a1512;
+}
+
+.dash-inbox__block {
+  margin: 0.85rem 0;
+}
+
+.dash-inbox__block h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.9rem;
+}
+
+.dash-inbox__block ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.dash-inbox__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 760px) {
+  .dash-inbox__body {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-inbox__list {
+    max-height: 40vh;
+    border-right: none;
+    border-bottom: 1px solid #e8e0d8;
+  }
+}

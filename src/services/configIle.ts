@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
+import { ENDERECO_EVENTO_PADRAO } from '../utils/enderecosPadrao';
 
 export type ConfigIle = {
   id: number;
@@ -16,6 +17,41 @@ export type ConfigIle = {
   uf: string | null;
   endereco_padrao_evento: string | null;
 };
+
+/** Monta o endereço do Ilê a partir dos Dados do Ilê (fallback: padrão da casa). */
+export function formatarEnderecoIle(
+  cfg: Pick<
+    ConfigIle,
+    'logradouro' | 'numero' | 'bairro' | 'cidade' | 'uf' | 'cep' | 'endereco_padrao_evento'
+  >,
+): string {
+  const logradouro = (cfg.logradouro ?? '').trim();
+  const numero = (cfg.numero ?? '').trim();
+  const bairro = (cfg.bairro ?? '').trim();
+  const cidade = (cfg.cidade ?? '').trim();
+  const uf = (cfg.uf ?? '').trim();
+  const cep = (cfg.cep ?? '').trim();
+
+  const rua = logradouro ? (numero ? `${logradouro}, ${numero}` : logradouro) : '';
+  const cidadeUf = [cidade, uf].filter(Boolean).join(' - ');
+  const montado = [rua, bairro, cidadeUf, cep].filter(Boolean).join(' - ').replace(/\s+/g, ' ').trim();
+  if (montado) return montado;
+
+  const padrao = (cfg.endereco_padrao_evento ?? '').trim();
+  return padrao || ENDERECO_EVENTO_PADRAO;
+}
+
+/** Local informado ou, se vazio, endereço do Ilê. */
+export function localOuEnderecoIle(
+  local: string | null | undefined,
+  cfg: Pick<
+    ConfigIle,
+    'logradouro' | 'numero' | 'bairro' | 'cidade' | 'uf' | 'cep' | 'endereco_padrao_evento'
+  >,
+): string {
+  const t = String(local ?? '').trim();
+  return t || formatarEnderecoIle(cfg);
+}
 
 const SELECT_FULL =
   'id, nome_ile, logo_base64, chave_pix, chave_pix_tipo, pix_qr_base64, mensalidade_valor, cep, logradouro, numero, bairro, cidade, uf, endereco_padrao_evento';

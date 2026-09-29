@@ -1,28 +1,34 @@
-import { useEffect, useState, Fragment } from 'react';
+﻿import { useEffect, useMemo, useState, Fragment } from 'react';
 import {
   ALL_RESOURCES,
   PERMISSION_PRESETS,
   RESOURCE_LABELS,
   emptyPermissions,
   fullPermissions,
+  mergeMensalidadeExtras,
   resourceAllowsAction,
   type PermFlags,
   type PermissionsMap,
   type ResourceKey,
 } from '../../../lib/permissions';
 import { fetchProfiles, updateProfilePermissions, type Profile } from '../../../services/profiles';
+import { criarAcesso, excluirAcesso, reenviarCredenciaisAcesso } from '../../../services/criarAcesso';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
 import {
+  AUDIT_RETENTION_DAYS,
   fetchAuditLog,
   formatAuditAcao,
   formatAuditOQueAconteceu,
   formatAuditPreview,
   formatAuditQuando,
   auditTela,
+  purgeExpiredAuditLog,
   writeAuditLog,
   type AuditDiff,
   type AuditRow,
 } from '../../../services/auditLog';
 import { Toast } from '../Toast';
+import { PaginationControls } from '../PaginationControls';
 
 type Tab = 'acessos' | 'auditoria';
 
@@ -32,6 +38,11 @@ const ACOES: { key: keyof PermFlags; label: string; hint: string }[] = [
   { key: 'u', label: 'Editar', hint: 'Pode alterar dados' },
   { key: 'd', label: 'Excluir', hint: 'Pode apagar ou inativar' },
   { key: 's', label: 'Enviar', hint: 'WhatsApp / e-mail' },
+];
+
+/** Extras de mensalidades (independentes de admin) — entram no diff de auditoria. */
+const EXTRAS_MENSALIDADE: { key: keyof PermFlags; label: string }[] = [
+  { key: 'lote', label: 'Lote' },
 ];
 
 function buildPermissionsAuditDiff(
@@ -63,7 +74,10 @@ function buildPermissionsAuditDiff(
 
   const fmtFlags = (flags: PermFlags | undefined) => {
     if (!flags) return 'Nenhuma';
-    const on = ACOES.filter((a) => flags[a.key]).map((a) => a.label);
+    const on = [
+      ...ACOES.filter((a) => flags[a.key]).map((a) => a.label),
+      ...EXTRAS_MENSALIDADE.filter((a) => flags[a.key]).map((a) => a.label),
+    ];
     return on.length ? on.join(', ') : 'Nenhuma';
   };
 
@@ -80,7 +94,7 @@ function buildPermissionsAuditDiff(
 const PRESET_META: Record<string, { titulo: string; descricao: string }> = {
   auxiliar_cobrancas: {
     titulo: 'Auxiliar de cobranças',
-    descricao: 'Mensalidades, obrigações, caixa e consulta de membros',
+    descricao: 'Mensalidades, cobranças, caixa e consulta de membros',
   },
   auxiliar_eventos: {
     titulo: 'Auxiliar de eventos',
@@ -88,7 +102,7 @@ const PRESET_META: Record<string, { titulo: string; descricao: string }> = {
   },
   auxiliar_atendimento: {
     titulo: 'Auxiliar de atendimento',
-    descricao: 'Clientes, orçamentos e agenda',
+    descricao: 'Clientes, vendas e agenda',
   },
   auxiliar_leitura: {
     titulo: 'Somente leitura',
@@ -104,8 +118,26 @@ export function AcessosAdminScreen() {
   const [draft, setDraft] = useState<PermissionsMap>({});
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [auditOpen, setAuditOpen] = useState<string | null>(null);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditPageSize, setAuditPageSize] = useState(
+    () => Number(localStorage.getItem('auditoria_page_size') || '20'),
+  );
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [criarOpen, setCriarOpen] = useState(false);
+  const [criarSaving, setCriarSaving] = useState(false);
+  const [criarForm, setCriarForm] = useState({
+    email: '',
+    nome_exibicao: '',
+    is_admin: true,
+  });
+  const [senhaFallback, setSenhaFallback] = useState<{
+    email: string;
+    nome: string;
+    senha: string;
+  } | null>(null);
+  const [excluirOpen, setExcluirOpen] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
 
   const reload = async () => {
     try {
@@ -116,7 +148,11 @@ export function AcessosAdminScreen() {
         if (again) {
           setSelected(again);
           setBaseline(again);
-          setDraft(again.is_admin ? fullPermissions() : { ...emptyPermissions(), ...again.permissions });
+          setDraft(
+            again.is_admin
+              ? mergeMensalidadeExtras(fullPermissions(), again.permissions?.cobrancas)
+              : { ...emptyPermissions(), ...again.permissions },
+          );
         }
       }
     } catch (e) {
@@ -131,15 +167,50 @@ export function AcessosAdminScreen() {
 
   useEffect(() => {
     if (tab !== 'auditoria') return;
-    fetchAuditLog()
-      .then(setAudit)
-      .catch((e) => setToast({ msg: e.message, variant: 'error' }));
+    let cancelled = false;
+    void (async () => {
+      await purgeExpiredAuditLog(AUDIT_RETENTION_DAYS);
+      try {
+        const rows = await fetchAuditLog();
+        if (!cancelled) {
+          setAudit(rows);
+          setAuditPage(1);
+          setAuditOpen(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setToast({ msg: e instanceof Error ? e.message : 'Erro ao carregar auditoria.', variant: 'error' });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [tab]);
+
+  const totalAudit = audit.length;
+  const auditPaginado = useMemo(() => {
+    const start = (auditPage - 1) * auditPageSize;
+    return audit.slice(start, start + auditPageSize);
+  }, [audit, auditPage, auditPageSize]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(totalAudit / auditPageSize));
+    if (auditPage > totalPages) setAuditPage(totalPages);
+  }, [totalAudit, auditPage, auditPageSize]);
+
+  useEffect(() => {
+    localStorage.setItem('auditoria_page_size', String(auditPageSize));
+  }, [auditPageSize]);
 
   const openProfile = (p: Profile) => {
     setSelected(p);
     setBaseline(p);
-    setDraft(p.is_admin ? fullPermissions() : { ...emptyPermissions(), ...p.permissions });
+    setDraft(
+      p.is_admin
+        ? mergeMensalidadeExtras(fullPermissions(), p.permissions?.cobrancas)
+        : { ...emptyPermissions(), ...p.permissions },
+    );
   };
 
   const toggle = (res: ResourceKey, key: keyof PermFlags) => {
@@ -165,7 +236,7 @@ export function AcessosAdminScreen() {
               is_admin: selected.is_admin,
               ativo: selected.ativo,
               nome_exibicao: selected.nome_exibicao,
-              permissions: selected.is_admin ? fullPermissions() : draft,
+              permissions: draft,
             })
           : undefined;
       await writeAuditLog({
@@ -184,6 +255,74 @@ export function AcessosAdminScreen() {
     }
   };
 
+  const abrirCriar = () => {
+    setCriarForm({ email: '', nome_exibicao: '', is_admin: true });
+    setSenhaFallback(null);
+    setCriarOpen(true);
+  };
+
+  const confirmarCriarAcesso = async () => {
+    setCriarSaving(true);
+    try {
+      const result = await criarAcesso({
+        email: criarForm.email,
+        nome_exibicao: criarForm.nome_exibicao,
+        is_admin: criarForm.is_admin,
+      });
+      await writeAuditLog({
+        action: 'create',
+        entity: 'profiles',
+        entity_id: result.user_id,
+        resumo: `${result.email}${criarForm.is_admin ? ' (admin)' : ''}`,
+      });
+      if (result.email_enviado) {
+        setToast({ msg: `Acesso criado e senha enviada para ${result.email}.`, variant: 'success' });
+        setCriarOpen(false);
+      } else if (result.senha_temporaria) {
+        setSenhaFallback({
+          email: result.email,
+          nome: criarForm.nome_exibicao.trim(),
+          senha: result.senha_temporaria,
+        });
+        setToast({
+          msg: 'Acesso criado. Envie a senha por e-mail (envio automático indisponível).',
+          variant: 'success',
+        });
+      } else {
+        setToast({ msg: `Acesso criado para ${result.email}.`, variant: 'success' });
+        setCriarOpen(false);
+      }
+      await reload();
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Erro ao criar acesso.', variant: 'error' });
+    } finally {
+      setCriarSaving(false);
+    }
+  };
+
+  const confirmarExcluirAcesso = async () => {
+    if (!selected) return;
+    setExcluindo(true);
+    try {
+      const result = await excluirAcesso(selected.user_id);
+      await writeAuditLog({
+        action: 'delete',
+        entity: 'profiles',
+        entity_id: result.user_id,
+        resumo: result.email || selected.email,
+      });
+      setToast({ msg: `Acesso de ${result.email || selected.email} excluído.`, variant: 'success' });
+      setExcluirOpen(false);
+      setSelected(null);
+      setBaseline(null);
+      await reload();
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Erro ao excluir acesso.', variant: 'error' });
+    } finally {
+      setExcluindo(false);
+    }
+  };
+
   return (
     <div className="dash-acessos" data-tour="acessos-admin">
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
@@ -192,6 +331,13 @@ export function AcessosAdminScreen() {
           <h1>Acessos de Admin</h1>
           <p className="dash-muted">Escolha uma pessoa à esquerda e marque o que ela pode fazer em cada tela.</p>
         </div>
+        {tab === 'acessos' && (
+          <div className="dash-page-head__actions">
+            <button type="button" className="dash-add-button" onClick={abrirCriar}>
+              Novo acesso
+            </button>
+          </div>
+        )}
       </header>
 
       <div className="dash-tabs" data-tour="acessos-abas">
@@ -238,9 +384,19 @@ export function AcessosAdminScreen() {
                   <h2>{selected.nome_exibicao || selected.email}</h2>
                   <p className="dash-muted">{selected.email}</p>
                 </div>
-                <button type="button" className="dash-btn-primary" disabled={saving} onClick={() => void salvar()}>
-                  {saving ? 'Salvando…' : 'Salvar permissões'}
-                </button>
+                <div className="dash-acessos__editor-actions">
+                  <button
+                    type="button"
+                    className="dash-btn-danger"
+                    disabled={saving || excluindo}
+                    onClick={() => setExcluirOpen(true)}
+                  >
+                    Excluir acesso
+                  </button>
+                  <button type="button" className="dash-btn-primary" disabled={saving} onClick={() => void salvar()}>
+                    {saving ? 'Salvando…' : 'Salvar permissões'}
+                  </button>
+                </div>
               </div>
 
               <section className="dash-acessos__block">
@@ -270,12 +426,14 @@ export function AcessosAdminScreen() {
                       onChange={(e) => {
                         const is_admin = e.target.checked;
                         setSelected({ ...selected, is_admin });
-                        if (is_admin) setDraft(fullPermissions());
+                        if (is_admin) {
+                          setDraft((d) => mergeMensalidadeExtras(fullPermissions(), d.cobrancas));
+                        }
                       }}
                     />
                     <span>
                       <strong>Administrador total</strong>
-                      <small>Acesso completo a todas as telas (as opções abaixo ficam bloqueadas)</small>
+                      <small>Acesso completo às telas (Lote e Sem caixa continuam à parte)</small>
                     </span>
                   </label>
                   <label className="dash-acessos__check">
@@ -287,6 +445,26 @@ export function AcessosAdminScreen() {
                     <span>
                       <strong>Conta ativa</strong>
                       <small>Se desmarcar, a pessoa não entra no sistema</small>
+                    </span>
+                  </label>
+                </div>
+              </section>
+
+              <section className="dash-acessos__block">
+                <h3>Mensalidades — opções extras</h3>
+                <p className="dash-muted dash-acessos__block-hint">
+                  Independente de administrador: marque só se esta pessoa puder usar pagamento em lote.
+                </p>
+                <div className="dash-acessos__flags">
+                  <label className="dash-acessos__check">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(draft.cobrancas?.lote)}
+                      onChange={() => toggle('cobrancas', 'lote')}
+                    />
+                    <span>
+                      <strong>Lote</strong>
+                      <small>Pagar o mês atual em lote na tela de mensalidades</small>
                     </span>
                   </label>
                 </div>
@@ -378,8 +556,8 @@ export function AcessosAdminScreen() {
 
               {selected.is_admin && (
                 <p className="dash-acessos__admin-note">
-                  Esta pessoa é <strong>administrador total</strong>. Desmarque essa opção se quiser definir permissões
-                  tela a tela.
+                  Esta pessoa é <strong>administrador total</strong> nas telas. Lote e Sem caixa só valem se
+                  estiverem marcados acima — admin sozinho não libera essas opções.
                 </p>
               )}
             </div>
@@ -391,6 +569,7 @@ export function AcessosAdminScreen() {
         <div className="dash-audit" data-tour="acessos-auditoria">
           <p className="dash-muted dash-audit__hint">
             Clique em uma linha para ver o detalhe: quando, quem, em qual tela e o que mudou (antigo → atual).
+            Registros com mais de {AUDIT_RETENTION_DAYS} dias são removidos automaticamente.
           </p>
           <div className="dash-audit-table-wrap">
             <table className="dash-audit-table">
@@ -407,11 +586,11 @@ export function AcessosAdminScreen() {
                 {audit.length === 0 && (
                   <tr>
                     <td colSpan={5} className="dash-muted">
-                      Nenhuma alteração registrada ainda.
+                      Nenhuma alteração nos últimos {AUDIT_RETENTION_DAYS} dias.
                     </td>
                   </tr>
                 )}
-                {audit.map((a) => {
+                {auditPaginado.map((a) => {
                   const aberto = auditOpen === a.id;
                   const preview = formatAuditPreview(a.diff);
                   const tela = auditTela(a.entity, a.diff);
@@ -506,6 +685,205 @@ export function AcessosAdminScreen() {
                 })}
               </tbody>
             </table>
+          </div>
+          {totalAudit > 0 && (
+            <PaginationControls
+              totalItems={totalAudit}
+              currentPage={auditPage}
+              pageSize={auditPageSize}
+              onPageChange={(p) => {
+                setAuditPage(p);
+                setAuditOpen(null);
+              }}
+              onPageSizeChange={setAuditPageSize}
+            />
+          )}
+        </div>
+      )}
+
+      {criarOpen && (
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="criar-acesso-title"
+          onClick={onModalOverlayClick(() => {
+            if (!criarSaving) setCriarOpen(false);
+          })}
+        >
+          <div className="dash-modal dash-modal--acesso" onClick={(e) => e.stopPropagation()}>
+            <div className="dash-modal__head">
+              <h2 id="criar-acesso-title">Novo acesso</h2>
+              <button
+                type="button"
+                className="dash-modal__close"
+                aria-label="Fechar"
+                disabled={criarSaving}
+                onClick={() => setCriarOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            {!senhaFallback ? (
+              <>
+                <p className="dash-muted">
+                  Cria a conta, gera uma senha aleatória e envia para o e-mail. No primeiro login a pessoa troca a
+                  senha.
+                </p>
+                <div className="dash-member-form">
+                  <label className="dash-field">
+                    <span>E-mail</span>
+                    <input
+                      type="email"
+                      autoComplete="off"
+                      value={criarForm.email}
+                      onChange={(e) => setCriarForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="pessoa@email.com"
+                      disabled={criarSaving}
+                    />
+                  </label>
+                  <label className="dash-field">
+                    <span>Nome de exibição</span>
+                    <input
+                      type="text"
+                      value={criarForm.nome_exibicao}
+                      onChange={(e) => setCriarForm((f) => ({ ...f, nome_exibicao: e.target.value }))}
+                      placeholder="Ex.: Fulano"
+                      maxLength={80}
+                      disabled={criarSaving}
+                    />
+                  </label>
+                  <label className="dash-acessos__check">
+                    <input
+                      type="checkbox"
+                      checked={criarForm.is_admin}
+                      onChange={(e) => setCriarForm((f) => ({ ...f, is_admin: e.target.checked }))}
+                      disabled={criarSaving}
+                    />
+                    <span>
+                      <strong>Administrador total</strong>
+                      <small>Acesso completo às telas (recomendado para novos acessos de gestão)</small>
+                    </span>
+                  </label>
+                </div>
+                <div className="dash-modal__actions">
+                  <button
+                    type="button"
+                    className="dash-btn-secondary"
+                    disabled={criarSaving}
+                    onClick={() => setCriarOpen(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    className="dash-btn-primary"
+                    disabled={criarSaving || !criarForm.email.trim()}
+                    onClick={() => void confirmarCriarAcesso()}
+                  >
+                    {criarSaving ? 'Criando…' : 'Criar e enviar senha'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="dash-muted">
+                  Conta criada. O envio automático de e-mail não está configurado — envie a senha abaixo para{' '}
+                  <strong>{senhaFallback.email}</strong>.
+                </p>
+                <label className="dash-field">
+                  <span>Senha temporária</span>
+                  <input type="text" readOnly value={senhaFallback.senha} onFocus={(e) => e.target.select()} />
+                </label>
+                <div className="dash-modal__actions">
+                  <button
+                    type="button"
+                    className="dash-btn-secondary"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(senhaFallback.senha);
+                      setToast({ msg: 'Senha copiada.', variant: 'success' });
+                    }}
+                  >
+                    Copiar senha
+                  </button>
+                  <button
+                    type="button"
+                    className="dash-btn-primary"
+                    onClick={() => {
+                      void (async () => {
+                        try {
+                          await reenviarCredenciaisAcesso({
+                            to: senhaFallback.email,
+                            nome: senhaFallback.nome,
+                            senha: senhaFallback.senha,
+                          });
+                          setToast({ msg: 'E-mail enviado pelo No-reply.', variant: 'success' });
+                          setCriarOpen(false);
+                          setSenhaFallback(null);
+                        } catch (e) {
+                          setToast({
+                            msg: e instanceof Error ? e.message : 'Não foi possível enviar o e-mail.',
+                            variant: 'error',
+                          });
+                        }
+                      })();
+                    }}
+                  >
+                    Enviar e-mail (No-reply)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {excluirOpen && selected && (
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="excluir-acesso-title"
+          onClick={onModalOverlayClick(() => {
+            if (!excluindo) setExcluirOpen(false);
+          })}
+        >
+          <div className="dash-modal dash-modal--acesso" onClick={(e) => e.stopPropagation()}>
+            <div className="dash-modal__head">
+              <h2 id="excluir-acesso-title">Excluir acesso</h2>
+              <button
+                type="button"
+                className="dash-modal__close"
+                aria-label="Fechar"
+                disabled={excluindo}
+                onClick={() => setExcluirOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <p className="dash-muted">
+              Remover permanentemente o acesso de <strong>{selected.nome_exibicao || selected.email}</strong> (
+              {selected.email})? A pessoa deixa de conseguir entrar na área restrita.
+            </p>
+            <div className="dash-modal__actions">
+              <button
+                type="button"
+                className="dash-btn-secondary"
+                disabled={excluindo}
+                onClick={() => setExcluirOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="dash-btn-danger"
+                disabled={excluindo}
+                onClick={() => void confirmarExcluirAcesso()}
+              >
+                {excluindo ? 'Excluindo…' : 'Excluir definitivamente'}
+              </button>
+            </div>
           </div>
         </div>
       )}

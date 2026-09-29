@@ -12,15 +12,21 @@ import {
   fetchMembrosMensalidade,
   MESES_LABEL,
   membroApareceNoAno,
+  mensalidadeEstaAtrasada,
   mesAntesDaEntrada,
   mesDesligadoPorInativacao,
   type MensalidadeRow,
   type MembroMensalidade,
 } from '../../../services/mensalidades';
-import { fetchConfigIle } from '../../../services/configIle';
+import { fetchConfigIle, formatarEnderecoIle } from '../../../services/configIle';
+import { enviarEmail } from '../../../services/enviarEmail';
+import { fetchMapaOrixaCabeca, type OrixaCabecaRef } from '../../../services/membros';
 import { buildWaMeLink, openExternal } from '../../../utils/whatsappLink';
 import { formatDateBR } from '../../../utils/formatDate';
 import { gerarPdfRelatorio } from '../../../utils/pdfRelatorio';
+import { carregarLogoBase64 } from '../../../utils/logoBase64';
+import { primeiroNome, saudacaoFilhoSanto } from '../../../utils/saudacaoFilhoSanto';
+import { matchesSearch } from '../../../utils/searchFold';
 import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { Toast } from '../Toast';
 
@@ -49,9 +55,8 @@ function isAtrasada(c: CobrancaComMembro, hoje: string) {
   return Boolean(venc && venc < hoje);
 }
 
-function mensalidadeAtrasada(ano: number, mes: number, hoje: Date, diaLimite = 15) {
-  const limite = new Date(ano, mes - 1, diaLimite);
-  return hoje > limite;
+function mensalidadeAtrasada(ano: number, mes: number, hoje: Date) {
+  return mensalidadeEstaAtrasada(ano, mes, hoje);
 }
 
 type MensalidadeAberto = {
@@ -85,32 +90,64 @@ export function AtrasadosScreen({ canSend = true }: Props) {
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [pix, setPix] = useState('');
   const [ileNome, setIleNome] = useState('Ilê');
-  const [obs, setObs] = useState<Record<string, string>>({});
+  const [ileLogo, setIleLogo] = useState<string | null>(null);
+  const [ileEndereco, setIleEndereco] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [cabecaByPessoa, setCabecaByPessoa] = useState<Map<string, OrixaCabecaRef>>(() => new Map());
 
   const hojeIso = new Date().toISOString().slice(0, 10);
   const hoje = useMemo(() => new Date(), []);
 
-  const obsKey = (pessoaId: string) => `atrasados_obs_${ano}_${pessoaId}`;
-
   useEffect(() => {
-    void fetchCobrancasComMembros()
-      .then((data) => setCobrancas(data.filter((c) => !isMensalidadeTipo(c))))
-      .catch((e) => setToast({ msg: e instanceof Error ? e.message : 'Erro', variant: 'error' }));
-    fetchConfigIle()
-      .then((c) => {
-        setPix(c.chave_pix ?? '');
-        setIleNome(c.nome_ile?.trim() || 'Ilê');
+    let cancelled = false;
+    void Promise.all([
+      fetchCobrancasComMembros().then((data) => data.filter((c) => !isMensalidadeTipo(c))),
+      fetchConfigIle().then(async (c) => {
+        const logo = c.logo_base64 || (await carregarLogoBase64());
+        return { c, logo };
+      }),
+    ])
+      .then(([cob, cfg]) => {
+        if (cancelled) return;
+        setCobrancas(cob);
+        setPix(cfg.c.chave_pix ?? '');
+        setIleNome(cfg.c.nome_ile?.trim() || 'Ilê');
+        setIleEndereco(formatarEnderecoIle(cfg.c));
+        setIleLogo(cfg.logo);
       })
-      .catch(() => undefined);
+      .catch((e) => {
+        if (!cancelled) {
+          setToast({ msg: e instanceof Error ? e.message : 'Erro', variant: 'error' });
+          void carregarLogoBase64().then(setIleLogo);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
     void Promise.all([fetchMensalidadesAno(ano), fetchMembrosMensalidade()])
-      .then(([rows, membros]) => {
+      .then(async ([rows, membros]) => {
+        if (cancelled) return;
         setMensRows(rows);
         setMembrosBase(membros);
+        const mapa = await fetchMapaOrixaCabeca(membros.map((m) => m.id));
+        if (!cancelled) setCabecaByPessoa(mapa);
       })
-      .catch((e) => setToast({ msg: e instanceof Error ? e.message : 'Erro nas mensalidades', variant: 'error' }));
+      .catch((e) => {
+        if (!cancelled) {
+          setToast({ msg: e instanceof Error ? e.message : 'Erro nas mensalidades', variant: 'error' });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [ano]);
 
   const membros = useMemo(() => {
@@ -170,10 +207,10 @@ export function AtrasadosScreen({ canSend = true }: Props) {
   }, [mensRows, membrosBase, cobrancas, ano, hoje, hojeIso]);
 
   const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     return membros.filter((m) => {
       if (soAtrasados && m.qtdAtraso === 0) return false;
-      if (q && !m.nome.toLowerCase().includes(q)) return false;
+      if (q && !matchesSearch(m.nome, q)) return false;
       return true;
     });
   }, [membros, busca, soAtrasados]);
@@ -185,8 +222,13 @@ export function AtrasadosScreen({ canSend = true }: Props) {
   }, [filtrados]);
 
   const buildMsg = (m: MembroAtraso) => {
+    const cabeca = cabecaByPessoa.get(m.pessoaId);
     const lines = [
-      `Olá ${m.nome}!`,
+      saudacaoFilhoSanto({
+        nome: m.nome,
+        orixaCabeca: cabeca?.orixa_cabeca_nome,
+        qualidadeCabeca: cabeca?.orixa_cabeca_qualidade_nome,
+      }),
       '',
       `Segue o resumo de valores em aberto com o ${ileNome}:`,
     ];
@@ -197,10 +239,10 @@ export function AtrasadosScreen({ canSend = true }: Props) {
       });
     }
     if (m.cobrancas.length) {
-      lines.push('', 'Obrigações:');
+      lines.push('', 'Cobranças:');
       m.cobrancas.forEach((c) => {
         lines.push(
-          `• ${c.descricao || 'Obrigação'} (venc. ${formatDateBR(c.vencimento)}) — ${money(valorSaldoCobranca(c))}`,
+          `• ${c.descricao || 'Cobrança'} (venc. ${formatDateBR(c.vencimento)}) — ${money(valorSaldoCobranca(c))}`,
         );
       });
     }
@@ -228,50 +270,57 @@ export function AtrasadosScreen({ canSend = true }: Props) {
     openExternal(url);
   };
 
-  const setObsMembro = (pessoaId: string, value: string) => {
-    setObs((prev) => ({ ...prev, [pessoaId]: value }));
-    try {
-      localStorage.setItem(obsKey(pessoaId), value);
-    } catch {
-      /* ignore */
-    }
+  const email = (m: MembroAtraso) => {
+    void (async () => {
+      const to = String(m.email ?? '').trim();
+      if (!to) {
+        setToast({ msg: 'Membro sem e-mail cadastrado.', variant: 'error' });
+        return;
+      }
+      try {
+        await enviarEmail({
+          to,
+          subject: `Valores em aberto — ${ileNome}`,
+          title: 'Valores em aberto',
+          text: buildMsg(m),
+        });
+        const quem = primeiroNome(m.nome) || m.nome;
+        setToast({ msg: `E-mail enviado à ${quem}.`, variant: 'success' });
+      } catch (e) {
+        setToast({
+          msg: e instanceof Error ? e.message : 'Não foi possível enviar o e-mail.',
+          variant: 'error',
+        });
+      }
+    })();
   };
 
-  useEffect(() => {
-    const next: Record<string, string> = {};
-    membros.forEach((m) => {
-      try {
-        next[m.pessoaId] = localStorage.getItem(obsKey(m.pessoaId)) ?? '';
-      } catch {
-        next[m.pessoaId] = '';
-      }
-    });
-    setObs(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega obs ao mudar lista/ano
-  }, [membros, ano]);
-
   const relatorio = () => {
-    const linhas = filtrados.flatMap((m) => [
-      ...m.mensalidades.map((c) => ({
-        nome: m.nome,
-        data: `${String(c.mes).padStart(2, '0')}/${ano}`,
-        descricao: `Mensalidade ${MESES_LABEL[c.mes - 1]}`,
-        valor: c.valor,
-        tipo: 'mensalidade',
-      })),
-      ...m.cobrancas.map((c) => ({
-        nome: m.nome,
-        data: formatDateBR(c.vencimento),
-        descricao: c.descricao || 'Obrigação',
-        valor: valorSaldoCobranca(c),
-        tipo: c.tipo,
-      })),
-    ]);
+    const map = new Map<string, number>();
+    for (const m of filtrados) {
+      const total = m.totalMens + m.totalCob;
+      if (total <= 0) continue;
+      map.set(m.nome, (map.get(m.nome) ?? 0) + total);
+    }
+    const linhas = [...map.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { sensitivity: 'base' }))
+      .map(([nome, valor]) => ({
+        nome,
+        data: '',
+        descricao: '',
+        valor,
+      }));
     gerarPdfRelatorio({
       periodo: { de: `${ano}-01-01`, ate: `${ano}-12-31` },
       tituloPrincipal: `Atrasados — ${ano}`,
-      subtitulo: `${kpis.membros} membros · ${kpis.comAtraso} com atraso · Total ${money(kpis.total)}`,
+      subtitulo: soAtrasados ? 'Somente membros com atraso.' : 'Membros com valores em aberto.',
       total: kpis.total,
+      totalLabel: 'Total em aberto',
+      ileNome,
+      ileEndereco,
+      logoBase64: ileLogo,
+      variante: 'aberto',
+      fileNamePrefix: `atrasados-${ano}`,
       linhas,
     });
   };
@@ -288,12 +337,13 @@ export function AtrasadosScreen({ canSend = true }: Props) {
       <header className="dash-atrasados__header">
         <h1>Atrasados</h1>
         <p className="dash-muted">
-          Mensalidades e obrigações em aberto/atraso. Mensagem pronta para WhatsApp com Pix.
+          Mensalidades e cobranças em aberto/atraso. Mensagem pronta para WhatsApp com Pix.
         </p>
       </header>
 
       <div className="dash-atrasados__toolbar" data-tour="atrasados-toolbar">
         <SearchableSelect
+          className="dash-atrasados__ano"
           options={anoOptions}
           value={String(ano)}
           onChange={(v) => setAno(Number(v))}
@@ -301,14 +351,16 @@ export function AtrasadosScreen({ canSend = true }: Props) {
         />
         <input
           className="dash-atrasados__busca"
-          placeholder="Nome do membro"
+          placeholder="Buscar membro…"
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
+          aria-label="Buscar membro"
         />
         <button
           type="button"
           className={`dash-toggle-paid${soAtrasados ? ' is-on' : ''}`}
           onClick={() => setSoAtrasados((v) => !v)}
+          aria-pressed={soAtrasados}
         >
           Só atrasados
           <span className="dash-atrasados__badge">{kpis.comAtraso}</span>
@@ -319,6 +371,10 @@ export function AtrasadosScreen({ canSend = true }: Props) {
       </div>
 
       <div className="dash-grid-stats dash-atrasados__kpis" data-tour="atrasados-kpis">
+        {loading ? (
+          <p className="dash-muted">Carregando…</p>
+        ) : (
+          <>
         <article className="dash-card">
           <h3>Membros na lista</h3>
           <p className="dash-big">{kpis.membros}</p>
@@ -331,10 +387,12 @@ export function AtrasadosScreen({ canSend = true }: Props) {
           <h3>Total em aberto</h3>
           <p className="dash-big dash-big--money">{money(kpis.total)}</p>
         </article>
+          </>
+        )}
       </div>
 
       <div className="dash-atrasados__list" data-tour="atrasados-lista">
-        {filtrados.length === 0 ? (
+        {loading ? null : filtrados.length === 0 ? (
           <p className="dash-muted">Nenhum registro para os filtros atuais.</p>
         ) : (
           filtrados.map((m) => (
@@ -356,6 +414,15 @@ export function AtrasadosScreen({ canSend = true }: Props) {
                   >
                     Copiar
                   </button>
+                  {canSend && (
+                    <button
+                      type="button"
+                      className="dash-add-button dash-add-button--secondary"
+                      onClick={() => email(m)}
+                    >
+                      E-mail
+                    </button>
+                  )}
                   {canSend && (
                     <button type="button" className="dash-btn-primary" onClick={() => whatsapp(m)}>
                       WhatsApp
@@ -382,7 +449,7 @@ export function AtrasadosScreen({ canSend = true }: Props) {
                   )}
                   {m.cobrancas.length > 0 && (
                     <>
-                      <h4>Obrigações</h4>
+                      <h4>Cobranças</h4>
                       <ul>
                         {m.cobrancas.map((c) => (
                           <li key={String(c.id)}>
@@ -391,7 +458,7 @@ export function AtrasadosScreen({ canSend = true }: Props) {
                                 isAtrasada(c, hojeIso) ? 'dash-atrasados__dot' : 'dash-atrasados__dot--ok'
                               }
                             />
-                            {c.descricao || 'Obrigação'} (venc. {formatDateBR(c.vencimento)}) —{' '}
+                            {c.descricao || 'Cobrança'} (venc. {formatDateBR(c.vencimento)}) —{' '}
                             {money(valorSaldoCobranca(c))}
                           </li>
                         ))}
@@ -401,19 +468,10 @@ export function AtrasadosScreen({ canSend = true }: Props) {
                 </div>
                 <div className="dash-atrasados__totais">
                   <p>Mensalidades: {money(m.totalMens)}</p>
-                  <p>Obrigações: {money(m.totalCob)}</p>
+                  <p>Cobranças: {money(m.totalCob)}</p>
                   <p>
                     <strong>Total: {money(m.totalMens + m.totalCob)}</strong>
                   </p>
-                  <label className="dash-field">
-                    <span>Obs.</span>
-                    <textarea
-                      rows={2}
-                      value={obs[m.pessoaId] ?? ''}
-                      onChange={(e) => setObsMembro(m.pessoaId, e.target.value)}
-                      placeholder="Anotação local…"
-                    />
-                  </label>
                 </div>
               </div>
             </article>

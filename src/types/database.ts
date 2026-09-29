@@ -149,7 +149,19 @@ export interface Umbanda {
 
 
 
-export type CobrancaTipo = 'mensalidade' | 'obrigacao' | 'outros';
+export type CobrancaTipo = string;
+
+/** Normaliza tipo legado → nome de categoria do caixa. */
+export function labelCobrancaTipo(tipo: string | null | undefined): string {
+  const t = String(tipo ?? '').trim();
+  if (!t) return '—';
+  const key = t.toLowerCase();
+  if (key === 'mensalidade') return 'Mensalidade';
+  if (key === 'obrigacao') return 'Cobrança';
+  if (key === 'outros') return 'Outro';
+  if (key === 'venda') return 'Venda';
+  return t;
+}
 
 
 
@@ -180,6 +192,9 @@ export interface Cobranca {
   pessoa_id?: UUID | null;
 
   membro_id?: UUID | null;
+
+  /** Venda (orçamento) que originou esta cobrança. */
+  orcamento_id?: UUID | null;
 
   created_at?: string | null;
 

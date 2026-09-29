@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchPessoasLista, deletePessoa, restorePessoa, fetchReferenciasPerfilMembro } from '../../../services/membros';
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fetchPessoasLista, deletePessoa, restorePessoa, fetchReferenciasPerfilMembro, labelOrixaCabeca } from '../../../services/membros';
 import {
   deleteCobranca,
   fetchCobrancasComMembros,
@@ -18,12 +18,15 @@ import { OrumaleSection } from './OrumaleSection';
 import { ExusSection } from './ExusSection';
 import { UmbandaSection } from './UmbandaSection';
 import { CobrancaForm, type CobrancaFormValues } from '../cobrancas/CobrancaForm';
+import './MembrosScreen.css';
 import { CobrancasReadOnlySummary } from './CobrancasReadOnlySummary';
-import type { PessoaListaItem } from '../../../services/membros';
+import type { PessoaListaItem, PessoasListaStatus } from '../../../services/membros';
 import { PerfilImpressao } from './PerfilImpressao';
 import { formatarTelefoneMascara, somenteDigitosTelefone } from '../../../utils/telefone';
+import { matchesSearchFields } from '../../../utils/searchFold';
 import { fetchHistoricoOrumale, type HistoricoOrumaleItem } from '../../../services/orumaleHistorico';
 import { gerarPdfPerfil } from '../../../services/gerarPdfPerfil';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
 import { carregarLogoBase64 } from '../../../utils/logoBase64';
 import { formatDateBR } from '../../../utils/formatDate';
 import { PaginationControls } from '../PaginationControls';
@@ -33,16 +36,26 @@ import { writeAuditLog } from '../../../services/auditLog';
 const BUSCA_MEMBROS_PLACEHOLDER = 'Pesquisar por nome, orisá de cabeça ou telefone';
 
 type View = 'list' | 'form';
-type SortKey = 'nome' | 'telefone' | 'orixa' | 'situacao';
+type SortKey = 'nome' | 'telefone' | 'orixa' | 'financeiro' | 'status';
 
 function defaultDirFor(key: SortKey): 'asc' | 'desc' {
-  if (key === 'situacao') return 'desc';
+  if (key === 'financeiro' || key === 'status') return 'desc';
   return 'asc';
 }
 
-type Props = { canExcel?: boolean; canRestore?: boolean };
+type Props = {
+  canExcel?: boolean;
+  canRestore?: boolean;
+  openPessoaId?: string | null;
+  onOpenConsumed?: () => void;
+};
 
-export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
+export function MembrosScreen({
+  canExcel = true,
+  canRestore = false,
+  openPessoaId = null,
+  onOpenConsumed,
+}: Props) {
   const [view, setView] = useState<View>('list');
   const [editId, setEditId] = useState<UUID | null>(null);
   const [lista, setLista] = useState<PessoaListaItem[]>([]);
@@ -53,7 +66,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
   const [loadingLista, setLoadingLista] = useState(true);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<UUID | null>(null);
-  const [verExcluidos, setVerExcluidos] = useState(false);
+  const [statusFiltro, setStatusFiltro] = useState<PessoasListaStatus>('ativos');
   const [importing, setImporting] = useState(false);
   const [excelMenuAberto, setExcelMenuAberto] = useState(false);
   const excelMenuRef = useRef<HTMLDivElement | null>(null);
@@ -72,18 +85,19 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
     return () => document.body.removeAttribute('data-ficha-membro');
   }, [view]);
 
-  const reloadAll = useCallback(async () => {
-    setLoadingLista(true);
+  const reloadAll = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (!silent) setLoadingLista(true);
     try {
-      const [p, c] = await Promise.all([fetchPessoasLista(verExcluidos), fetchCobrancasComMembros()]);
+      const [p, c] = await Promise.all([fetchPessoasLista(statusFiltro), fetchCobrancasComMembros()]);
       setLista(p);
       setCobrancas(c);
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao carregar membros.', variant: 'error' });
     } finally {
-      setLoadingLista(false);
+      if (!silent) setLoadingLista(false);
     }
-  }, [verExcluidos]);
+  }, [statusFiltro]);
 
   const salvarCobrancaPerfil = async (values: CobrancaFormValues) => {
     if (!cobrancaEditing) return;
@@ -103,19 +117,22 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
       tipo: values.tipo,
     });
     setToast({ msg: 'Cobrança atualizada.', variant: 'success' });
-    await reloadAll();
+    await reloadAll({ silent: true });
     setCobrancaEditing(null);
   };
 
   const confirmDeleteCobranca = async () => {
     if (!cobrancaDelete) return;
+    const targetId = cobrancaDelete.id;
     try {
-      await deleteCobranca(cobrancaDelete.id);
+      setCobrancas((prev) => prev.filter((c) => String(c.id) !== String(targetId)));
       setCobrancaDelete(null);
+      await deleteCobranca(targetId);
       setToast({ msg: 'Cobrança excluída.', variant: 'success' });
-      await reloadAll();
+      await reloadAll({ silent: true });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Erro ao excluir.', variant: 'error' });
+      await reloadAll({ silent: true });
     }
   };
 
@@ -124,7 +141,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
   }, [reloadAll]);
 
   const afterSave = useCallback(async () => {
-    await reloadAll();
+    await reloadAll({ silent: true });
     setView('list');
     setEditId(null);
     setToast({ msg: 'Membro salvo com sucesso', variant: 'success' });
@@ -138,13 +155,16 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
   }, [cobrancas, editId]);
 
   const listaFiltrada = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     if (!q) return lista;
     const qDigitos = somenteDigitosTelefone(q);
     return lista.filter((m) => {
-      const base = `${m.nome} ${m.contato ?? ''} ${m.orixa_cabeca_nome ?? ''}`.toLowerCase();
+      const orixaLabel = labelOrixaCabeca(m.orixa_cabeca_nome, m.orixa_cabeca_qualidade_nome) ?? '';
       const contatoDigits = somenteDigitosTelefone(m.contato);
-      return base.includes(q) || (qDigitos.length > 0 && contatoDigits.includes(qDigitos));
+      return (
+        matchesSearchFields(q, m.nome, m.contato, orixaLabel) ||
+        (qDigitos.length > 0 && contatoDigits.includes(qDigitos))
+      );
     });
   }, [lista, busca]);
 
@@ -152,8 +172,10 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
     const out = [...listaFiltrada];
     out.sort((a, b) => {
       const dirMul = sort.dir === 'asc' ? 1 : -1;
-      const statusA = pessoaEstaDevendo(a.id, cobrancas) ? 1 : 0;
-      const statusB = pessoaEstaDevendo(b.id, cobrancas) ? 1 : 0;
+      const finA = pessoaEstaDevendo(a.id, cobrancas) ? 1 : 0;
+      const finB = pessoaEstaDevendo(b.id, cobrancas) ? 1 : 0;
+      const stA = a.deleted_at ? 1 : 0;
+      const stB = b.deleted_at ? 1 : 0;
       switch (sort.key) {
         case 'nome':
           return dirMul * a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' });
@@ -164,10 +186,15 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
               sensitivity: 'base',
             }))
           );
-        case 'orixa':
-          return dirMul * (a.orixa_cabeca_nome ?? '').localeCompare(b.orixa_cabeca_nome ?? '', 'pt-BR', { sensitivity: 'base' });
-        case 'situacao':
-          return dirMul * (statusA - statusB);
+        case 'orixa': {
+          const la = labelOrixaCabeca(a.orixa_cabeca_nome, a.orixa_cabeca_qualidade_nome) ?? '';
+          const lb = labelOrixaCabeca(b.orixa_cabeca_nome, b.orixa_cabeca_qualidade_nome) ?? '';
+          return dirMul * la.localeCompare(lb, 'pt-BR', { sensitivity: 'base' });
+        }
+        case 'financeiro':
+          return dirMul * (finA - finB);
+        case 'status':
+          return dirMul * (stA - stB);
         default:
           return 0;
       }
@@ -192,7 +219,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
 
   useEffect(() => {
     setPage(1);
-  }, [busca, sort.key, sort.dir]);
+  }, [busca, sort.key, sort.dir, statusFiltro]);
 
   const onSort = (key: SortKey) => {
     setSort((s) => {
@@ -213,6 +240,13 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
     setView('form');
   };
 
+  useEffect(() => {
+    if (!openPessoaId) return;
+    openEdit(openPessoaId as UUID);
+    onOpenConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só reage ao id externo
+  }, [openPessoaId]);
+
   const backToList = () => {
     setView('list');
     setEditId(null);
@@ -225,6 +259,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
   const handleDelete = async (id: UUID) => {
     try {
       const nome = lista.find((m) => String(m.id) === String(id))?.nome;
+      setLista((prev) => prev.filter((m) => String(m.id) !== String(id)));
       await deletePessoa(id);
       await writeAuditLog({
         action: 'delete',
@@ -241,10 +276,11 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
       } else {
         setDeleteConfirm(null);
       }
-      await reloadAll();
+      await reloadAll({ silent: true });
       setToast({ msg: 'Membro inativado.', variant: 'success' });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Não foi possível inativar.', variant: 'error' });
+      await reloadAll({ silent: true });
     }
   };
 
@@ -262,10 +298,11 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
           changes: [{ campo: 'Situação', antigo: 'Inativado', novo: 'Ativo' }],
         },
       });
-      await reloadAll();
+      await reloadAll({ silent: true });
       setToast({ msg: 'Membro restaurado.', variant: 'success' });
     } catch (e) {
       setToast({ msg: e instanceof Error ? e.message : 'Não foi possível restaurar.', variant: 'error' });
+      await reloadAll({ silent: true });
     }
   };
 
@@ -275,7 +312,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
     setExcelMenuAberto(false);
     try {
       const res = await importMembrosFromExcel(file);
-      await reloadAll();
+      await reloadAll({ silent: true });
       setToast({
         msg: `Importação: ${res.ok} ok, ${res.skipped} saltados.${res.errors.length ? ` Erros: ${res.errors.slice(0, 3).join('; ')}` : ''}`,
         variant: res.errors.length && !res.ok ? 'error' : 'success',
@@ -603,7 +640,12 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
         />
 
         {cobrancaDelete && (
-          <div className="dash-modal-overlay" role="dialog" aria-modal="true">
+          <div
+            className="dash-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onClick={onModalOverlayClick(() => setCobrancaDelete(null))}
+          >
             <div className="dash-modal dash-modal--narrow">
               <h2>Excluir cobrança?</h2>
               <p>Esta ação não pode ser desfeita.</p>
@@ -620,10 +662,15 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
         )}
 
         {deleteConfirm && (
-          <div className="dash-modal-overlay" role="dialog" aria-modal="true">
+          <div
+            className="dash-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            onClick={onModalOverlayClick(() => setDeleteConfirm(null))}
+          >
             <div className="dash-modal dash-modal--narrow">
               <h2>Inativar membro?</h2>
-              <p>O membro sai da lista ativa e pode ser restaurado em “Ver inativados”.</p>
+              <p>O membro sai da lista ativa. Use o filtro Status → Inativos para restaurar.</p>
               <div className="dash-form-actions">
                 <button type="button" className="dash-btn-secondary" onClick={() => setDeleteConfirm(null)}>
                   Cancelar
@@ -642,28 +689,12 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
   return (
     <>
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
-      <header className="dash-page-head">
+      <header className="dash-page-head dash-membros-head">
         <div className="dash-page-head__titles">
           <h1>Membros</h1>
           <p className="dash-muted">Cadastro e ficha dos membros do Ilê.</p>
         </div>
-      </header>
-      <div className="dash-section-header dash-toolbar" data-tour="membros-filtros">
-        <div className="dash-filtros dash-filtros--busca">
-          <input
-            placeholder={BUSCA_MEMBROS_PLACEHOLDER}
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            aria-label={BUSCA_MEMBROS_PLACEHOLDER}
-          />
-        </div>
-        {canRestore && (
-          <label className="dash-toggle-paid dash-toggle-paid--compact">
-            <input type="checkbox" checked={verExcluidos} onChange={(e) => setVerExcluidos(e.target.checked)} />
-            <span>Ver inativados</span>
-          </label>
-        )}
-        <div className="dash-section-actions">
+        <div className="dash-page-head__actions">
           {canExcel && (
             <div className="dash-excel-menu" ref={excelMenuRef}>
               <button
@@ -711,15 +742,28 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
             Adicionar membro
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="dash-filtros-mobile" data-tour="membros-filtros-mobile">
+      <div className="dash-membros-toolbar" data-tour="membros-filtros">
         <input
+          className="dash-membros-toolbar__busca"
           placeholder={BUSCA_MEMBROS_PLACEHOLDER}
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           aria-label={BUSCA_MEMBROS_PLACEHOLDER}
         />
+        <label className="dash-membros-status-filtro">
+          <span className="dash-visually-hidden">Status</span>
+          <select
+            value={statusFiltro}
+            onChange={(e) => setStatusFiltro(e.target.value as PessoasListaStatus)}
+            aria-label="Filtrar por status"
+          >
+            <option value="ativos">Ativos</option>
+            {canRestore && <option value="inativos">Inativos</option>}
+            {canRestore && <option value="todos">Todos</option>}
+          </select>
+        </label>
       </div>
 
       {loadingLista ? (
@@ -734,7 +778,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
                     <button type="button" className="dash-th-sort" onClick={() => onSort('nome')} title="Ordenar por membro">
                       <span>Membro</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'nome' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'nome' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
@@ -742,7 +786,7 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
                     <button type="button" className="dash-th-sort" onClick={() => onSort('telefone')} title="Ordenar por telefone">
                       <span>Telefone</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'telefone' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'telefone' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
@@ -750,15 +794,23 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
                     <button type="button" className="dash-th-sort" onClick={() => onSort('orixa')} title="Ordenar por orisá de cabeça">
                       <span>Orisá cabeça</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'orixa' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'orixa' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
-                  <th scope="col" aria-sort={sort.key === 'situacao' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                    <button type="button" className="dash-th-sort" onClick={() => onSort('situacao')} title="Ordenar por situação">
-                      <span>Situação</span>
+                  <th scope="col" aria-sort={sort.key === 'financeiro' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('financeiro')} title="Ordenar por financeiro">
+                      <span>Financeiro</span>
                       <span className="dash-th-sort__icons" aria-hidden>
-                        {sort.key === 'situacao' ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+                        {sort.key === 'financeiro' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </button>
+                  </th>
+                  <th scope="col" aria-sort={sort.key === 'status' ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                    <button type="button" className="dash-th-sort" onClick={() => onSort('status')} title="Ordenar por status">
+                      <span>Status</span>
+                      <span className="dash-th-sort__icons" aria-hidden>
+                        {sort.key === 'status' ? (sort.dir === 'asc' ? '▲' : '▼') : '↕'}
                       </span>
                     </button>
                   </th>
@@ -767,7 +819,8 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
               <tbody>
                 {membrosPaginados.map((m) => {
                   const devendo = pessoaEstaDevendo(m.id, cobrancas);
-                  const excluido = Boolean(m.deleted_at);
+                  const inativo = Boolean(m.deleted_at);
+                  const orixaLabel = labelOrixaCabeca(m.orixa_cabeca_nome, m.orixa_cabeca_qualidade_nome);
                   return (
                     <tr
                       key={m.id}
@@ -775,40 +828,45 @@ export function MembrosScreen({ canExcel = true, canRestore = false }: Props) {
                       role="button"
                       tabIndex={0}
                       onClick={() => {
-                        if (excluido) return;
+                        if (inativo) return;
                         openEdit(m.id);
                       }}
                       onKeyDown={(e) => {
-                        if (excluido) return;
+                        if (inativo) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           openEdit(m.id);
                         }
                       }}
-                      aria-label={excluido ? `${m.nome} (excluído)` : `Abrir perfil de ${m.nome}`}
+                      aria-label={inativo ? `${m.nome} (inativo)` : `Abrir perfil de ${m.nome}`}
                     >
-                      <td>
-                        {m.nome}
-                        {excluido && <em className="dash-muted"> · excluído</em>}
-                      </td>
+                      <td>{m.nome}</td>
                       <td>{m.contato ? formatarTelefoneMascara(m.contato) : '—'}</td>
-                      <td>{m.orixa_cabeca_nome || '—'}</td>
+                      <td>{orixaLabel || '—'}</td>
                       <td>
-                        {excluido && canRestore ? (
-                          <button
-                            type="button"
-                            className="dash-btn-secondary dash-btn-min"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleRestore(m.id);
-                            }}
-                          >
-                            Restaurar
-                          </button>
-                        ) : (
-                          <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
-                            {devendo ? 'Devendo' : 'Em dia'}
+                        <span className={`dash-badge ${devendo ? 'dash-badge--devendo' : 'dash-badge--ok'}`}>
+                          {devendo ? 'Devendo' : 'Em dia'}
+                        </span>
+                      </td>
+                      <td>
+                        {inativo ? (
+                          <span className="dash-membros-status-cell">
+                            <span className="dash-badge dash-badge--inativo">Inativo</span>
+                            {canRestore && (
+                              <button
+                                type="button"
+                                className="dash-btn-secondary dash-btn-min"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void handleRestore(m.id);
+                                }}
+                              >
+                                Restaurar
+                              </button>
+                            )}
                           </span>
+                        ) : (
+                          <span className="dash-badge dash-badge--ativo">Ativo</span>
                         )}
                       </td>
                     </tr>

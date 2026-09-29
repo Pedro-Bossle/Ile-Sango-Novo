@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as XLSX from 'xlsx';
 import {
   createCaixaCategoria,
@@ -6,6 +6,7 @@ import {
   fetchCaixaCategorias,
   fetchCaixaPeriodo,
   fetchCaixaSaldoAntes,
+  reorderCaixaCategorias,
   softDeleteCaixa,
   softDeleteCaixaCategoria,
   updateCaixaManual,
@@ -14,10 +15,17 @@ import {
 } from '../../../services/caixa';
 import { writeAuditLog, buildAuditDiff } from '../../../services/auditLog';
 import { formatDateBR } from '../../../utils/formatDate';
-import { parseValorInput, sanitizeValorInput } from '../../../utils/money';
+import { parseValorInput, sanitizeValorInput, valorToMaskedInput } from '../../../utils/money';
+import { matchesSearchFields } from '../../../utils/searchFold';
 import { gerarPdfRelatorio } from '../../../utils/pdfRelatorio';
+import { carregarLogoBase64 } from '../../../utils/logoBase64';
+import { fetchConfigIle, formatarEnderecoIle } from '../../../services/configIle';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
+import { useConfirmAction } from '../ConfirmActionModal';
 import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
+import { SortableCategoryList } from '../SortableCategoryList';
 import { Toast } from '../Toast';
+import { FORMA_PAGAMENTO_PADRAO, FORMAS_PAGAMENTO } from '../../../lib/formasPagamento';
 
 const CAIXA_TIPO_OPTIONS: SearchableSelectOption[] = [
   { value: 'entrada', label: 'Entrada' },
@@ -30,6 +38,7 @@ const CAIXA_FIELD_LABELS: Record<string, string> = {
   categoria: 'Categoria',
   descricao: 'Descrição',
   valor: 'Valor',
+  forma_pagamento: 'Tipo de pagamento',
 };
 
 const MESES = [
@@ -58,11 +67,12 @@ type Draft = {
   categoria: string;
   descricao: string;
   valor: string;
+  forma_pagamento: string;
 };
 
 type Props = { canCreate?: boolean; canDelete?: boolean; canUpdate?: boolean };
 
-type SortKey = 'data' | 'tipo' | 'categoria' | 'descricao' | 'valor';
+type SortKey = 'data' | 'tipo' | 'categoria' | 'pgto' | 'descricao' | 'valor';
 
 function sortCaixaItems(items: CaixaLancamento[], key: SortKey, dir: 'asc' | 'desc') {
   const mul = dir === 'asc' ? 1 : -1;
@@ -77,6 +87,11 @@ function sortCaixaItems(items: CaixaLancamento[], key: SortKey, dir: 'asc' | 'de
         break;
       case 'categoria':
         cmp = (a.categoria || '').localeCompare(b.categoria || '', 'pt-BR', { sensitivity: 'base' });
+        break;
+      case 'pgto':
+        cmp = (a.forma_pagamento || '').localeCompare(b.forma_pagamento || '', 'pt-BR', {
+          sensitivity: 'base',
+        });
         break;
       case 'descricao': {
         const da = (a.descricao || a.membro_nome || '').toLowerCase();
@@ -114,7 +129,7 @@ function SortTh({
       <button type="button" className="dash-th-sort" onClick={() => onSort(sortKey)} title={`Ordenar por ${label.toLowerCase()}`}>
         <span>{label}</span>
         <span className="dash-th-sort__icons" aria-hidden>
-          {active ? (dir === 'asc' ? '▲' : '▼') : '⇅'}
+          {active ? (dir === 'asc' ? '▲' : '▼') : '↕'}
         </span>
       </button>
     </th>
@@ -131,16 +146,21 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
   const [categorias, setCategorias] = useState<CaixaCategoria[]>([]);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [sheet, setSheet] = useState(false);
+  const { ask: askConfirm, modal: confirmModal } = useConfirmAction();
   const [catsOpen, setCatsOpen] = useState(false);
   const [novaCat, setNovaCat] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'data', dir: 'desc' });
+  const [ileNome, setIleNome] = useState('Ilê');
+  const [ileLogo, setIleLogo] = useState<string | null>(null);
+  const [ileEndereco, setIleEndereco] = useState('');
   const [draft, setDraft] = useState<Draft>({
     data: new Date().toISOString().slice(0, 10),
     tipo: 'entrada',
     categoria: '',
     descricao: '',
     valor: '',
+    forma_pagamento: FORMA_PAGAMENTO_PADRAO,
   });
 
   const from = `${ano}-01-01`;
@@ -166,13 +186,25 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
     void reload();
   }, [reload]);
 
+  useEffect(() => {
+    fetchConfigIle()
+      .then(async (c) => {
+        setIleNome(c.nome_ile?.trim() || 'Ilê');
+        setIleEndereco(formatarEnderecoIle(c));
+        if (c.logo_base64) setIleLogo(c.logo_base64);
+        else setIleLogo(await carregarLogoBase64());
+      })
+      .catch(() => {
+        void carregarLogoBase64().then(setIleLogo);
+      });
+  }, []);
+
   const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     return rows.filter((r) => {
       if (filtroCat && r.categoria !== filtroCat) return false;
       if (!q) return true;
-      const blob = `${r.descricao ?? ''} ${r.categoria} ${r.membro_nome ?? ''}`.toLowerCase();
-      return blob.includes(q);
+      return matchesSearchFields(q, r.descricao, r.categoria, r.forma_pagamento, r.membro_nome);
     });
   }, [rows, busca, filtroCat]);
 
@@ -225,6 +257,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
       categoria: categorias[0]?.nome ?? 'Outro',
       descricao: '',
       valor: '',
+      forma_pagamento: FORMA_PAGAMENTO_PADRAO,
     });
     setSheet(true);
   };
@@ -236,14 +269,36 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
       tipo: r.tipo,
       categoria: r.categoria,
       descricao: r.descricao ?? '',
-      valor: String(r.valor),
+      valor: valorToMaskedInput(r.valor),
+      forma_pagamento: r.forma_pagamento || FORMA_PAGAMENTO_PADRAO,
     });
     setSheet(true);
   };
 
   const excluirLancamento = async (r: CaixaLancamento) => {
-    if (!window.confirm(`Excluir o lançamento “${r.descricao || r.membro_nome || r.categoria}”?`)) return;
+    const label = r.descricao || r.membro_nome || r.categoria;
+    const vinculadoPagamento = Boolean(r.pagamento_id);
+    const vinculadoMensalidade =
+      Boolean(r.mensalidade_id) ||
+      /Mensalidade\s+[A-Za-zÇç]{3}\/\d{4}/i.test(String(r.descricao ?? '')) ||
+      String(r.categoria ?? '').toLowerCase() === 'mensalidade' ||
+      r.origem === 'mensalidade';
+    const ok = await askConfirm({
+      title: 'Confirmar exclusão',
+      message: (
+        <>
+          Excluir o lançamento <strong>{label}</strong>?
+          {vinculadoPagamento
+            ? ' Isso também remove o pagamento do histórico da cobrança e recalcula a quitação.'
+            : null}
+          {vinculadoMensalidade ? ' A mensalidade ligada voltará para em aberto.' : null}
+        </>
+      ),
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
+      setRows((prev) => prev.filter((x) => x.id !== r.id));
       await softDeleteCaixa(r.id);
       const before = {
         data: r.data,
@@ -263,6 +318,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
       setToast({ msg: 'Lançamento excluído.', variant: 'success' });
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : 'Erro', variant: 'error' });
+      await reload();
     }
   };
 
@@ -275,6 +331,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
         categoria: draft.categoria || 'Outro',
         descricao: draft.descricao.trim(),
         valor: parseValorInput(draft.valor) ?? 0,
+        forma_pagamento: draft.forma_pagamento || FORMA_PAGAMENTO_PADRAO,
       };
       if (!payload.descricao) throw new Error('Informe a descrição.');
       if (draft.id) {
@@ -314,11 +371,12 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
   };
 
   const exportExcel = () => {
-    const header = ['Data', 'Tipo', 'Categoria', 'Descrição', 'Valor', 'Origem', 'Membro'];
+    const header = ['Data', 'Tipo', 'Categoria', 'Pgto', 'Descrição', 'Valor', 'Origem', 'Membro'];
     const body = filtrados.map((r) => [
       r.data,
       r.tipo,
       r.categoria,
+      r.forma_pagamento ?? '',
       r.descricao ?? '',
       Number(r.valor),
       r.origem,
@@ -336,12 +394,19 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
       tituloPrincipal: `Fluxo de caixa — ${ano}`,
       subtitulo: `Entradas ${money(kpis.entradas)} · Saídas ${money(kpis.saidas)} · Resultado ${money(kpis.resultado)}`,
       total: kpis.resultado,
+      totalLabel: 'Resultado do período',
+      ileNome,
+      ileEndereco,
+      logoBase64: ileLogo,
+      variante: 'caixa',
+      fileNamePrefix: `fluxo-caixa-${ano}`,
       linhas: filtrados.map((r) => ({
-        nome: r.categoria,
+        nome: r.categoria || '—',
         data: formatDateBR(r.data),
-        descricao: `${r.tipo === 'entrada' ? '+' : '-'} ${r.descricao ?? r.membro_nome ?? '—'}`,
-        valor: r.tipo === 'entrada' ? Number(r.valor) : -Number(r.valor),
+        descricao: (r.descricao ?? r.membro_nome ?? '').trim() || '—',
+        valor: Number(r.valor) || 0,
         tipo: r.tipo,
+        forma: r.forma_pagamento?.trim() || '—',
       })),
     });
   };
@@ -369,6 +434,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
   return (
     <div className="dash-caixa" data-tour="financeiro-caixa">
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
+      {confirmModal}
 
       <header className="dash-page-head dash-caixa__header" data-tour="caixa-header">
         <div className="dash-page-head__titles">
@@ -503,6 +569,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
                       <SortTh label="Data" sortKey="data" activeKey={sort.key} dir={sort.dir} onSort={onSort} />
                       <SortTh label="Tipo" sortKey="tipo" activeKey={sort.key} dir={sort.dir} onSort={onSort} />
                       <SortTh label="Categoria" sortKey="categoria" activeKey={sort.key} dir={sort.dir} onSort={onSort} />
+                      <SortTh label="Pgto" sortKey="pgto" activeKey={sort.key} dir={sort.dir} onSort={onSort} />
                       <SortTh label="Descrição" sortKey="descricao" activeKey={sort.key} dir={sort.dir} onSort={onSort} />
                       <SortTh label="Valor" sortKey="valor" activeKey={sort.key} dir={sort.dir} onSort={onSort} />
                       <th scope="col" className="dash-th-static">
@@ -520,6 +587,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
                           </span>
                         </td>
                         <td>{r.categoria}</td>
+                        <td>{r.forma_pagamento?.trim() || '—'}</td>
                         <td>{r.descricao || r.membro_nome || '—'}</td>
                         <td className={r.tipo === 'entrada' ? 'dash-caixa__in' : 'dash-caixa__out'}>
                           {r.tipo === 'entrada' ? '+ ' : '− '}
@@ -564,7 +632,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
       {!porMes.length && <p className="dash-muted">Nenhum lançamento no período.</p>}
 
       {sheet && (
-        <div className="dash-modal-overlay">
+        <div className="dash-modal-overlay" onClick={onModalOverlayClick(() => setSheet(false))}>
           <div className="dash-modal dash-modal--caixa-lanc" role="dialog" aria-modal="true">
             <div className="dash-modal__head">
               <div>
@@ -608,13 +676,13 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
               </label>
               <div className="dash-event-sheet__row">
                 <label className="dash-event-sheet__field">
-                  <span>Valor (R$)</span>
+                  <span>Valor</span>
                   <input
                     required
                     inputMode="decimal"
                     value={draft.valor}
                     onChange={(e) => setDraft({ ...draft, valor: sanitizeValorInput(e.target.value) })}
-                    placeholder="0,00"
+                    placeholder="R$ 0,00"
                   />
                 </label>
                 <label className="dash-event-sheet__field">
@@ -622,6 +690,20 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
                   <input type="date" required value={draft.data} onChange={(e) => setDraft({ ...draft, data: e.target.value })} />
                 </label>
               </div>
+              <label className="dash-event-sheet__field">
+                <span>Tipo de pagamento</span>
+                <select
+                  value={draft.forma_pagamento}
+                  onChange={(e) => setDraft({ ...draft, forma_pagamento: e.target.value })}
+                  aria-label="Tipo de pagamento"
+                >
+                  {FORMAS_PAGAMENTO.map((f) => (
+                    <option key={f.value} value={f.value}>
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <div className="dash-form-actions dash-form-actions--modal-end">
                 <button type="button" className="dash-btn-secondary" onClick={() => setSheet(false)}>
                   Cancelar
@@ -636,7 +718,7 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
       )}
 
       {catsOpen && (
-        <div className="dash-modal-overlay">
+        <div className="dash-modal-overlay" onClick={onModalOverlayClick(() => setCatsOpen(false))}>
           <div className="dash-modal dash-modal--narrow" role="dialog">
             <div className="dash-modal__head">
               <h2>Categorias</h2>
@@ -644,24 +726,49 @@ export function FinanceiroScreen({ canCreate = true, canDelete = true, canUpdate
                 ×
               </button>
             </div>
-            <ul className="dash-caixa-cats-list">
-              {categorias.map((c) => (
-                <li key={c.id}>
+            <p className="dash-muted" style={{ padding: '0 1rem', margin: '0 0 0.5rem' }}>
+              Arraste para reordenar. A ordem vale nos filtros e lançamentos.
+            </p>
+            <SortableCategoryList
+              className="dash-caixa-cats-list"
+              items={categorias}
+              onItemsChange={setCategorias}
+              onReorder={(ids) =>
+                reorderCaixaCategorias(ids).catch((err) => {
+                  setToast({ msg: err instanceof Error ? err.message : 'Erro ao reordenar.', variant: 'error' });
+                  void reload();
+                })
+              }
+              renderItem={(c) => (
+                <>
                   <span>{c.nome}</span>
                   <button
                     type="button"
                     className="dash-btn-min"
                     onClick={() =>
-                      void softDeleteCaixaCategoria(c.id)
-                        .then(reload)
-                        .catch((err) => setToast({ msg: err instanceof Error ? err.message : 'Erro', variant: 'error' }))
+                      void (async () => {
+                        const ok = await askConfirm({
+                          title: 'Confirmar exclusão',
+                          message: (
+                            <>
+                              Remover a categoria <strong>{c.nome}</strong>?
+                            </>
+                          ),
+                          confirmLabel: 'Remover',
+                          confirmingLabel: 'Removendo…',
+                        });
+                        if (!ok) return;
+                        void softDeleteCaixaCategoria(c.id)
+                          .then(reload)
+                          .catch((err) => setToast({ msg: err instanceof Error ? err.message : 'Erro', variant: 'error' }));
+                      })()
                     }
                   >
                     Remover
                   </button>
-                </li>
-              ))}
-            </ul>
+                </>
+              )}
+            />
             <form
               className="dash-caixa-cats-add"
               onSubmit={(e) => {

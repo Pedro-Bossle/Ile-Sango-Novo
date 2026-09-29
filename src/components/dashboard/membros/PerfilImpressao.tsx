@@ -187,7 +187,7 @@ export function PerfilImpressao({
       </section>
 
       <section className="perfil-bloco perfil-secao-principal">
-        <h2>Cobranças / Obrigações</h2>
+        <h2>Cobranças</h2>
         {cobrancas.length === 0 ? (
           <p>Sem cobranças associadas.</p>
         ) : (

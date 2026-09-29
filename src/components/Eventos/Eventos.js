@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
+import { matchesSearchFields } from '../../utils/searchFold';
 import EventCard from './EventCard';
 import './Eventos.css';
 
@@ -46,8 +47,7 @@ export default function Eventos({ modo = 'home' }) {
 
   const locais = [...new Set(eventos.map((e) => e.local).filter(Boolean))];
   const eventosFiltrados = eventos.filter((e) => {
-    const texto = `${e.nome} ${e.descricao ?? ''} ${e.local ?? ''}`.toLowerCase();
-    const bateBusca = texto.includes(search.toLowerCase().trim());
+    const bateBusca = matchesSearchFields(search, e.nome, e.descricao, e.local);
     const bateLocal = filtroLocal === 'todos' || e.local === filtroLocal;
     return bateBusca && bateLocal;
   });

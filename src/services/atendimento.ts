@@ -19,6 +19,7 @@ export type ClienteVisita = {
   resumo: string | null;
   valor: number | null;
   pago: boolean;
+  forma_pagamento: string | null;
   obs: string | null;
   deleted_at: string | null;
 };
@@ -28,6 +29,8 @@ export type MembroMatch = {
   nome: string;
   contato: string | null;
   email: string | null;
+  orixa_cabeca_nome?: string | null;
+  orixa_cabeca_qualidade_nome?: string | null;
 };
 
 const SELECT_COM_PESSOA =
@@ -68,7 +71,17 @@ export async function fetchMembrosParaMatch(): Promise<MembroMatch[]> {
     .is('deleted_at', null)
     .order('nome');
   if (error) throw new Error(error.message);
-  return (data ?? []) as MembroMatch[];
+  const list = (data ?? []) as Array<{ id: string; nome: string; contato: string | null; email: string | null }>;
+  const { fetchMapaOrixaCabeca } = await import('./membros');
+  const mapa = await fetchMapaOrixaCabeca(list.map((m) => m.id));
+  return list.map((m) => {
+    const cabeca = mapa.get(m.id);
+    return {
+      ...m,
+      orixa_cabeca_nome: cabeca?.orixa_cabeca_nome ?? null,
+      orixa_cabeca_qualidade_nome: cabeca?.orixa_cabeca_qualidade_nome ?? null,
+    };
+  });
 }
 
 export async function fetchClientes(includeDeleted = false) {
@@ -142,7 +155,7 @@ export async function restoreCliente(id: string) {
 export async function fetchVisitas(clienteId: string) {
   const { data, error } = await supabase
     .from('cliente_visitas')
-    .select('id, cliente_id, data, resumo, valor, pago, obs, deleted_at')
+    .select('id, cliente_id, data, resumo, valor, pago, forma_pagamento, obs, deleted_at')
     .eq('cliente_id', clienteId)
     .is('deleted_at', null)
     .order('data', { ascending: false });
@@ -152,7 +165,7 @@ export async function fetchVisitas(clienteId: string) {
 
 export async function saveVisita(
   row: Partial<ClienteVisita> & { cliente_id: string; data: string },
-) {
+): Promise<string> {
   const { data: sessao } = await supabase.auth.getSession();
   if (row.id) {
     const { error } = await supabase
@@ -162,22 +175,29 @@ export async function saveVisita(
         resumo: row.resumo ?? null,
         valor: row.valor ?? null,
         pago: row.pago ?? false,
+        forma_pagamento: row.forma_pagamento ?? null,
         obs: row.obs ?? null,
       })
       .eq('id', row.id);
     if (error) throw new Error(error.message);
-    return;
+    return row.id;
   }
-  const { error } = await supabase.from('cliente_visitas').insert({
-    cliente_id: row.cliente_id,
-    data: row.data,
-    resumo: row.resumo ?? null,
-    valor: row.valor ?? null,
-    pago: row.pago ?? false,
-    obs: row.obs ?? null,
-    created_by: sessao?.session?.user?.id ?? null,
-  });
+  const { data, error } = await supabase
+    .from('cliente_visitas')
+    .insert({
+      cliente_id: row.cliente_id,
+      data: row.data,
+      resumo: row.resumo ?? null,
+      valor: row.valor ?? null,
+      pago: row.pago ?? false,
+      forma_pagamento: row.forma_pagamento ?? null,
+      obs: row.obs ?? null,
+      created_by: sessao?.session?.user?.id ?? null,
+    })
+    .select('id')
+    .single();
   if (error) throw new Error(error.message);
+  return data.id as string;
 }
 
 export async function softDeleteVisita(id: string) {
@@ -191,4 +211,117 @@ export async function softDeleteVisita(id: string) {
 export async function emAbertoCliente(clienteId: string): Promise<number> {
   const visitas = await fetchVisitas(clienteId);
   return visitas.filter((v) => !v.pago && v.valor != null).reduce((a, v) => a + Number(v.valor), 0);
+}
+
+export type PessoaParaCliente = {
+  id: string;
+  nome: string;
+  data_nascimento?: string | null;
+  contato?: string | null;
+  email?: string | null;
+  obs?: string | null;
+  deleted_at?: string | null;
+};
+
+/**
+ * Garante que o membro (pessoa) exista como cliente vinculado via pessoa_id.
+ * Sincroniza nome / nascimento / WhatsApp / e-mail; soft-delete acompanha o membro.
+ */
+export async function ensureClienteParaPessoa(pessoa: PessoaParaCliente): Promise<string | null> {
+  if (!pessoa?.id || !pessoa.nome?.trim()) return null;
+
+  const whatsapp = somenteDigitosTelefone(pessoa.contato) || null;
+  const email = pessoa.email?.trim() || null;
+  const payloadBase = {
+    nome: pessoa.nome.trim(),
+    data_nascimento: pessoa.data_nascimento || null,
+    whatsapp,
+    email,
+    obs: pessoa.obs ?? null,
+    pessoa_id: pessoa.id,
+  };
+
+  if (pessoa.deleted_at) {
+    const { error } = await supabase
+      .from('clientes')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('pessoa_id', pessoa.id)
+      .is('deleted_at', null);
+    if (error && !/pessoa_id/i.test(error.message)) throw new Error(error.message);
+    return null;
+  }
+
+  const { data: existentes, error: findErr } = await supabase
+    .from('clientes')
+    .select('id, deleted_at')
+    .eq('pessoa_id', pessoa.id)
+    .limit(10);
+
+  if (findErr && /pessoa_id/i.test(findErr.message)) {
+    return null;
+  }
+  if (findErr) throw new Error(findErr.message);
+
+  const lista = (existentes ?? []) as { id: string; deleted_at: string | null }[];
+  const existente =
+    lista.find((c) => !c.deleted_at) ?? lista[0];
+  if (existente) {
+    const { error } = await supabase
+      .from('clientes')
+      .update({ ...payloadBase, deleted_at: null })
+      .eq('id', existente.id);
+    if (error) throw new Error(error.message);
+    return existente.id;
+  }
+
+  // Tenta vincular cliente órfão com mesmo e-mail ou WhatsApp
+  if (email || (whatsapp && whatsapp.length >= 10)) {
+    const { data: candidatos } = await supabase
+      .from('clientes')
+      .select('id, email, whatsapp, pessoa_id')
+      .is('deleted_at', null)
+      .is('pessoa_id', null)
+      .limit(200);
+    const match = (candidatos ?? []).find((c) => {
+      if (email && normEmail(c.email) === normEmail(email)) return true;
+      const cw = somenteDigitosTelefone(c.whatsapp);
+      if (
+        whatsapp &&
+        whatsapp.length >= 10 &&
+        cw.length >= 10 &&
+        (whatsapp === cw || whatsapp.endsWith(cw.slice(-9)) || cw.endsWith(whatsapp.slice(-9)))
+      ) {
+        return true;
+      }
+      return false;
+    });
+    if (match) {
+      const { error } = await supabase
+        .from('clientes')
+        .update(payloadBase)
+        .eq('id', match.id);
+      if (error) throw new Error(error.message);
+      return match.id as string;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('clientes')
+    .insert(payloadBase)
+    .select('id')
+    .single();
+  if (error) {
+    // Corrida com o trigger do banco: reaproveita o cliente já criado
+    if (/duplicate|unique|pessoa_id/i.test(error.message)) {
+      const { data: again } = await supabase
+        .from('clientes')
+        .select('id')
+        .eq('pessoa_id', pessoa.id)
+        .is('deleted_at', null)
+        .maybeSingle();
+      if (again?.id) return again.id as string;
+    }
+    throw new Error(error.message);
+  }
+  return data!.id as string;
 }

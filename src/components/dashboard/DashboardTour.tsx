@@ -14,12 +14,11 @@ export const TOUR_SCREEN_LABELS: Record<string, string> = {
   eventos: 'Agenda',
   catalogo: 'Catálogo',
   membros: 'Membros',
-  cobrancas: 'Obrigações',
+  cobrancas: 'Cobranças',
   mensalidades: 'Mensalidades',
   atrasados: 'Atrasados',
   caixa: 'Fluxo de caixa',
   clientes: 'Clientes',
-  orcamentos: 'Orçamentos',
   agenda: 'Agenda',
   'dados-ile': 'Dados do Ilê',
   orixas: 'Orixás',
@@ -84,7 +83,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         target: '[data-tour="stats"]',
         placement: 'bottom',
         title: 'Indicadores',
-        content: 'Toque em um cartão para ir direto à Agenda, Caixa, Mensalidades ou Obrigações.',
+        content: 'Toque em um cartão para ir direto à Agenda, Caixa, Mensalidades ou Cobranças.',
       },
       {
         target: '[data-tour="atendimento-hoje"]',
@@ -107,10 +106,10 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
       withSidebar({
         target: '[data-tour="sidebar"]',
         placement: isMobileViewport() ? 'left' : 'right',
-        title: 'Menu lateral',
+        title: isMobileViewport() ? 'Menu Mais' : 'Menu lateral',
         content: isMobileViewport()
-          ? 'No celular, abra o menu pelo ☰. Grupos: Financeiro, Atendimento e Configurações.'
-          : 'Navegue por Financeiro, Atendimento e Configurações. Passe o mouse para expandir ou fixe com o pin.',
+          ? 'No celular, toque em Mais na barra inferior para abrir o restante dos menus (Catálogo, Membros, Financeiro, etc.).'
+          : 'Navegue por Financeiro, Clientes e Configurações. Passe o mouse para expandir ou fixe com o pin.',
       }),
     ];
 
@@ -126,13 +125,21 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
     }
 
     steps.push(
-      withSidebar({
-        target: '[data-tour="sidebar-tour"]',
-        placement: isMobileViewport() ? 'top' : 'right',
-        title: 'Tutorial por tela',
-        content:
-          'O botão “Tutorial: Nome da tela” reinicia o guia da tela em que você está. Cada tela tem o seu próprio tutorial.',
-      }),
+      isMobileViewport()
+        ? {
+            target: '[data-tour="sidebar-tour-mobile"]',
+            placement: 'top',
+            title: 'Tutorial por tela',
+            content:
+              'O botão “Tutorial” no rodapé reinicia o guia da tela em que você está. Cada tela tem o seu próprio tutorial.',
+          }
+        : withSidebar({
+            target: '[data-tour="sidebar-tour"]',
+            placement: 'right',
+            title: 'Tutorial por tela',
+            content:
+              'O botão “Tutorial: Nome da tela” reinicia o guia da tela em que você está. Cada tela tem o seu próprio tutorial.',
+          }),
     );
 
     return steps;
@@ -152,7 +159,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         target: '[data-tour="calendario-filtros"]',
         placement: 'bottom',
         title: 'Filtros',
-        content: 'Pesquise por título/local, filtre só eventos ou só compromissos, ou por usuário que criou.',
+        content: 'Pesquise por título/local ou digite uma data (ex.: 20/10/2026). Filtre por tipo ou usuário.',
       },
       {
         target: '[data-tour="eventos-calendario"]',
@@ -160,52 +167,41 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         title: 'Calendário',
         content: 'Navegue pelos meses. Clique num dia para escolher Evento ou Compromisso; clique num chip para editar.',
       },
-      {
-        target: '[data-tour="eventos-toolbar"]',
-        placement: 'bottom',
-        title: 'Ações',
-        content: 'Endereços padrão, novo evento da casa ou novo compromisso de atendimento.',
-      },
     ];
   }
 
   if (screen === 'catalogo') {
-    const filtrosTarget = isMobileViewport()
-      ? '[data-tour="catalogo-filtros-mobile"]'
-      : '[data-tour="catalogo-filtros"]';
     return [
       {
         target: 'body',
         placement: 'center',
         title: 'Catálogo',
-        content: 'Itens usados em orçamentos e serviços: nomes, categorias, valores e variações.',
+        content: 'Categorias com descrição e itens com valor individual, usados em vendas e atendimentos.',
         skipScroll: true,
       },
       {
-        target: filtrosTarget,
+        target: '[data-tour="catalogo-filtros"]',
         placement: 'bottom',
-        title: 'Pesquisa e categorias',
-        content: 'Busque por nome ou descrição e filtre por categoria.',
+        title: 'Pesquisa e grupos',
+        content: 'Busque por categoria ou item e filtre por grupo.',
       },
       {
         target: '[data-tour="catalogo-adicionar"]',
         placement: 'bottom',
-        title: 'Adicionar item',
-        content: 'Cadastre um novo item do catálogo.',
+        title: 'Nova categoria',
+        content: 'Crie uma categoria e depois adicione os itens com preço.',
       },
       {
         target: '[data-tour="catalogo-lista"]',
         placement: 'top',
-        title: 'Itens cadastrados',
-        content: 'Cada card tem opções de Editar e Excluir.',
+        title: 'Categorias e itens',
+        content: 'Expanda cada categoria para ver, editar ou excluir os itens.',
       },
     ];
   }
 
   if (screen === 'membros') {
-    const filtrosTarget = isMobileViewport()
-      ? '[data-tour="membros-filtros-mobile"]'
-      : '[data-tour="membros-filtros"]';
+    const filtrosTarget = '[data-tour="membros-filtros"]';
     return [
       {
         target: 'body',
@@ -220,7 +216,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         placement: 'bottom',
         title: 'Busca e atalhos',
         content:
-          'Pesquise por nome, orisá ou telefone. Use “Ver inativados” para restaurar quem saiu da lista ativa. O menu Excel exporta modelo ou importa planilha.',
+          'Pesquise por nome, orisá ou telefone. Filtre por Ativos, Inativos ou Todos. O menu Excel exporta modelo ou importa planilha.',
       },
       {
         target: '[data-tour="membros-adicionar"]',
@@ -245,7 +241,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         placement: 'center',
         title: 'Mensalidades',
         content:
-          'Grade anual por membro: A (aberto), P (pago), I (isento), D (desligado). Inativos não geram mensalidade a partir da data de inativação.',
+          'Grade anual por membro: A (aberto), P (pago), I (isento), D (desligado). No dia 1 vincula 1 mensalidade a cada integrante ativo; fica atrasada 10 dias depois.',
         skipScroll: true,
       },
       {
@@ -258,7 +254,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         target: '.dash-mens__kpis',
         placement: 'bottom',
         title: 'Resumo',
-        content: 'Recebido, em aberto e atrasado (após o dia 15) do ano selecionado.',
+        content: 'Recebido, em aberto e atrasado (10 dias após o dia 1) do ano selecionado.',
       },
       {
         target: '.dash-mens__table-wrap',
@@ -274,27 +270,27 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
       {
         target: 'body',
         placement: 'center',
-        title: 'Obrigações',
-        content: 'Obrigações e cobranças pontuais: filtros, pagamentos, lotes, WhatsApp/e-mail e relatórios.',
+        title: 'Cobranças',
+        content: 'Acompanhe recebidos e em aberto, quite parcial ou total e registre no fluxo de caixa.',
         skipScroll: true,
       },
       {
         target: '[data-tour="cobrancas-filtros"]',
         placement: 'bottom',
-        title: 'Filtros e período',
-        content: 'Busque por membro, defina De/Até, “vence esta semana” e veja pagas ou em aberto.',
+        title: 'Busca e filtros',
+        content: 'Busque por membro ou descrição, filtre por status (todas, em aberto, atrasadas, pagas) e ordene a lista.',
       },
       {
         target: '[data-tour="cobrancas-acoes"]',
         placement: 'bottom',
         title: 'Ações',
-        content: 'Crie obrigação individual ou em massa e abra o relatório de valores pagos.',
+        content: 'Copie a lista em aberto, crie nova cobrança ou use Mais para cobrança em massa e relatórios.',
       },
       {
         target: '[data-tour="cobrancas-lista"]',
         placement: 'top',
-        title: 'Tabela',
-        content: 'Registre pagamento, envie WhatsApp/e-mail e edite. No celular, role a tabela para o lado.',
+        title: 'Lista',
+        content: 'Cada item mostra progresso, status e atalhos para pagar, histórico, editar ou excluir.',
       },
     ];
   }
@@ -369,7 +365,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         placement: 'center',
         title: 'Clientes',
         content:
-          'Lista em largura total. Abra um cliente para ver Ficha, Ações (editar, visita, WhatsApp…) e Visitas.',
+          'Lista em largura total. Abra um cliente para ver dados, vendas e visitas. Vendas só existem dentro da ficha do cliente.',
         skipScroll: true,
       },
       {
@@ -382,31 +378,7 @@ function buildStepsForScreen(screen: string, ctx: BuildCtx): Step[] {
         target: '[data-tour="atendimento-clientes-lista"]',
         placement: 'top',
         title: 'Tabela de clientes',
-        content: 'Toque numa linha para abrir. Use as abas Ficha, Ações e Visitas.',
-      },
-    ];
-  }
-
-  if (screen === 'orcamentos') {
-    return [
-      {
-        target: 'body',
-        placement: 'center',
-        title: 'Orçamentos',
-        content: 'Monte propostas com itens do catálogo, envie por WhatsApp/e-mail, duplique e acompanhe o status.',
-        skipScroll: true,
-      },
-      {
-        target: '[data-tour="orcamentos-novo"]',
-        placement: 'bottom',
-        title: 'Novo orçamento',
-        content: 'Abre o formulário: escolha o cliente, o título e os itens do catálogo.',
-      },
-      {
-        target: '[data-tour="orcamentos-lista"]',
-        placement: 'top',
-        title: 'Orçamentos salvos',
-        content: 'Cada card mostra status e total. Duplicar cria uma cópia; Excluir remove da lista ativa.',
+        content: 'Toque numa linha para abrir a ficha. Lá pode criar venda (precisa dos dados do cliente) e registar visitas.',
       },
     ];
   }

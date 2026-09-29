@@ -39,6 +39,32 @@ const MESES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
 
 export const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+/** Mensalidade nasce no dia 1 da competência e vence 10 dias depois. */
+export const MENSALIDADE_DIAS_APOS_CRIACAO = 10;
+
+function startOfLocalDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Data de criação da competência (sempre dia 1 do mês). */
+export function dataCriacaoMensalidade(ano: number, mes: number): Date {
+  return new Date(ano, mes - 1, 1);
+}
+
+/** Data em que a mensalidade passa a ser considerada vencida (criação + 10 dias). */
+export function dataVencimentoMensalidade(ano: number, mes: number): Date {
+  const d = dataCriacaoMensalidade(ano, mes);
+  d.setDate(d.getDate() + MENSALIDADE_DIAS_APOS_CRIACAO);
+  return d;
+}
+
+/** Aberto e já passou (ou chegou) a data de vencimento (10 dias após o dia 1). */
+export function mensalidadeEstaAtrasada(ano: number, mes: number, hoje: Date = new Date()): boolean {
+  const h = startOfLocalDay(hoje);
+  const v = startOfLocalDay(dataVencimentoMensalidade(ano, mes));
+  return h >= v;
+}
+
 function ym(d: Date): { y: number; m: number } {
   return { y: d.getFullYear(), m: d.getMonth() + 1 };
 }
@@ -119,13 +145,16 @@ export async function fetchMensalidadesAno(ano: number): Promise<MensalidadeRow[
   if (error) throw new Error(error.message);
   return ((data ?? []) as MensalidadeRow[]).map((r) => ({
     ...r,
+    ano: Number(r.ano),
+    mes: Number(r.mes),
     valor: Number(r.valor),
   }));
 }
 
 /**
- * Garante células "aberto" para meses do ano até o mês corrente (ou dez se ano passado),
- * respeitando inativação. Não sobrescreve status já existentes.
+ * Garante células "aberto" para cada integrante ativo (até o mês corrente),
+ * como se fossem vinculadas no 1º dia do mês. Não sobrescreve status existentes.
+ * Ignora inativos (a partir do mês de inativação) e meses antes da data de entrada.
  */
 export async function garantirAbertosAno(ano: number, valorPadrao: number): Promise<void> {
   const [membros, existentes] = await Promise.all([fetchMembrosMensalidade(), fetchMensalidadesAno(ano)]);
@@ -146,6 +175,7 @@ export async function garantirAbertosAno(ano: number, valorPadrao: number): Prom
     if (!membroApareceNoAno(m, ano)) continue;
     for (let mes = 1; mes <= mesLimite; mes += 1) {
       if (mesAntesDaEntrada(m, ano, mes)) continue;
+      // Inativo: não gera a partir do mês de inativação
       if (mesDesligadoPorInativacao(m, ano, mes)) continue;
       if (chave.has(`${m.id}:${mes}`)) continue;
       inserts.push({ pessoa_id: m.id, ano, mes, status: 'aberto', valor: valorPadrao });
@@ -160,13 +190,39 @@ export async function garantirAbertosAno(ano: number, valorPadrao: number): Prom
   if (error) throw new Error(error.message);
 }
 
+/** Garante mensalidades do mês corrente para todos os integrantes ativos (chamada na dashboard). */
+export async function garantirMensalidadesMesCorrente(): Promise<void> {
+  const agora = new Date();
+  const ano = agora.getFullYear();
+  const mes = agora.getMonth() + 1;
+
+  const rpc = await supabase.rpc('gerar_mensalidades_competencia', {
+    p_ano: ano,
+    p_mes: mes,
+  });
+  if (!rpc.error) {
+    // Catch-up de meses anteriores do ano (entradas mid-year, etc.)
+    const valor = await fetchValorMensalidadePadrao();
+    await garantirAbertosAno(ano, valor);
+    return;
+  }
+
+  // Fallback se a migration ainda não rodou
+  const valor = await fetchValorMensalidadePadrao();
+  await garantirAbertosAno(ano, valor);
+}
+
 export function montarGradeMembro(
   m: MembroMensalidade,
   ano: number,
   rows: MensalidadeRow[],
   valorPadrao: number,
 ): CelulaMensalidade[] {
-  const byMes = new Map(rows.filter((r) => r.pessoa_id === m.id).map((r) => [r.mes, r]));
+  const byMes = new Map(
+    rows
+      .filter((r) => r.pessoa_id === m.id)
+      .map((r) => [Number(r.mes), r] as const),
+  );
   const agora = new Date();
   const { y: yNow, m: mNow } = ym(agora);
 
@@ -192,6 +248,7 @@ export function montarGradeMembro(
       };
     }
     const stored = byMes.get(mes);
+    // Linha persistida (inclui mês futuro pago) tem prioridade sobre o placeholder "vazio".
     if (stored) {
       return {
         mes,
@@ -227,7 +284,7 @@ export async function setMensalidadeStatus(input: {
     status: input.status,
     valor: input.valor,
     data_pagamento: input.status === 'pago' ? input.data_pagamento || new Date().toISOString().slice(0, 10) : null,
-    forma_pagamento: input.status === 'pago' ? input.forma_pagamento || 'PIX' : null,
+    forma_pagamento: input.status === 'pago' ? input.forma_pagamento || 'Pix' : null,
     updated_at: new Date().toISOString(),
   };
 
@@ -254,13 +311,12 @@ export async function incluirMembroNoAno(
   await garantirAbertosAno(ano, valorPadrao);
 }
 
-/** Totais da grade (ignora desligado/isento/vazio). */
+/** Totais da grade (ignora desligado/isento/vazio). Vencida = 10 dias após o dia 1. */
 export function resumirGrade(
   membros: MembroMensalidade[],
   ano: number,
   rows: MensalidadeRow[],
   valorPadrao: number,
-  diaAtraso = 15,
 ): { recebido: number; emAberto: number; atrasado: number } {
   const hoje = new Date();
   let recebido = 0;
@@ -274,8 +330,7 @@ export function resumirGrade(
       if (c.status === 'pago') recebido += c.valor;
       if (c.status === 'aberto') {
         emAberto += c.valor;
-        const limite = new Date(ano, c.mes - 1, diaAtraso);
-        if (hoje > limite) atrasado += c.valor;
+        if (mensalidadeEstaAtrasada(ano, c.mes, hoje)) atrasado += c.valor;
       }
     }
   }

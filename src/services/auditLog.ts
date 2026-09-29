@@ -50,12 +50,12 @@ export type AuditRow = {
 const ENTITY_LABELS: Record<string, string> = {
   pessoas: 'membro',
   profiles: 'permissões de acesso',
-  cobrancas: 'obrigação',
+  cobrancas: 'cobrança',
   mensalidades: 'mensalidade',
   clientes: 'cliente',
   caixa_lancamentos: 'lançamento do caixa',
   configuracoes_terreiro: 'dados do Ilê',
-  orcamentos: 'orçamento',
+  orcamentos: 'venda',
   agenda: 'compromisso',
   eventos: 'evento',
   cliente_visitas: 'visita',
@@ -64,12 +64,12 @@ const ENTITY_LABELS: Record<string, string> = {
 const ENTITY_TELA: Record<string, string> = {
   pessoas: 'Membros',
   profiles: 'Acessos de Admin',
-  cobrancas: 'Obrigações',
+  cobrancas: 'Cobranças',
   mensalidades: 'Mensalidades',
   clientes: 'Clientes',
   caixa_lancamentos: 'Fluxo de caixa',
   configuracoes_terreiro: 'Dados do Ilê',
-  orcamentos: 'Orçamentos',
+  orcamentos: 'Vendas (ficha do cliente)',
   agenda: 'Agenda (compromissos)',
   eventos: 'Agenda (eventos)',
   cliente_visitas: 'Visitas de atendimento',
@@ -202,10 +202,32 @@ export function parseAuditDiff(raw: unknown): AuditDiff | null {
   };
 }
 
-export async function fetchAuditLog(limit = 100): Promise<AuditRow[]> {
+/** Retenção da auditoria: registros mais antigos são ocultados e podem ser purgados. */
+export const AUDIT_RETENTION_DAYS = 90;
+
+function auditRetentionIso(days = AUDIT_RETENTION_DAYS): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - days);
+  return d.toISOString();
+}
+
+/** Remove registros fora do lifespan (RPC no banco). Falhas são ignoradas. */
+export async function purgeExpiredAuditLog(days = AUDIT_RETENTION_DAYS): Promise<number> {
+  try {
+    const { data, error } = await supabase.rpc('purge_audit_log_expirado', { dias: days });
+    if (error) return 0;
+    return typeof data === 'number' ? data : Number(data) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export async function fetchAuditLog(limit = 5000): Promise<AuditRow[]> {
+  const since = auditRetentionIso();
   const { data, error } = await supabase
     .from('audit_log')
     .select('id, actor_email, action, entity, entity_id, resumo, diff, created_at')
+    .gte('created_at', since)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error) throw new Error(error.message);

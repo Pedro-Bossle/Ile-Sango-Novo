@@ -19,6 +19,8 @@ import {
 } from '../../../services/sobrenomesOrisa';
 import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { Toast } from '../Toast';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
+import { matchesSearch, matchesSearchFields } from '../../../utils/searchFold';
 
 type Aba = 'orixas' | 'qualidades' | 'diginas';
 
@@ -157,15 +159,15 @@ export function OrixasConfigScreen() {
     return map;
   }, [qualidades]);
 
-  const termo = busca.trim().toLowerCase();
+  const termo = busca.trim();
 
   const orixasFiltrados = useMemo(
-    () => orixas.filter((o) => o.nome.toLowerCase().includes(termo)),
+    () => orixas.filter((o) => matchesSearch(o.nome, termo)),
     [orixas, termo],
   );
 
   const qualidadesFiltradas = useMemo(
-    () => qualidades.filter((q) => q.nome.toLowerCase().includes(termo)),
+    () => qualidades.filter((q) => matchesSearch(q.nome, termo)),
     [qualidades, termo],
   );
 
@@ -174,7 +176,7 @@ export function OrixasConfigScreen() {
       diginas.filter((d) => {
         const oNome = orixaNomeById.get(String(d.orixa_id ?? filtroOrixaId)) ?? '';
         const qNome = d.qualidade_id != null ? qualidadeNomeById.get(String(d.qualidade_id)) ?? '' : '';
-        return `${d.nome} ${oNome} ${qNome}`.toLowerCase().includes(termo);
+        return matchesSearchFields(termo, d.nome, oNome, qNome);
       }),
     [diginas, filtroOrixaId, orixaNomeById, qualidadeNomeById, termo],
   );
@@ -435,7 +437,7 @@ export function OrixasConfigScreen() {
       )}
 
       {modal && (
-        <div className="dash-modal-overlay">
+        <div className="dash-modal-overlay" onClick={onModalOverlayClick(() => setModal(null))}>
           <div className="dash-modal dash-modal--narrow" role="dialog" aria-modal="true">
             <div className="dash-modal__head">
               <h2>
@@ -500,7 +502,10 @@ export function OrixasConfigScreen() {
       )}
 
       {deleteConfirm && (
-        <div className="dash-modal-overlay">
+        <div
+          className="dash-modal-overlay"
+          onClick={onModalOverlayClick(() => !saving && setDeleteConfirm(null))}
+        >
           <div className="dash-modal dash-modal--narrow" role="dialog" aria-modal="true">
             <div className="dash-modal__head">
               <h2>Confirmar exclusão</h2>

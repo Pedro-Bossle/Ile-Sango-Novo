@@ -10,6 +10,47 @@ export type Profile = {
   permissions: PermissionsMap;
 };
 
+/**
+ * Contas internas de debug (ex.: "Pedro Bossle (Debugs)") —
+ * ficam ocultas em seleções, agenda e menu de Acessos.
+ * O próprio utilizador continua a poder autenticar via fetchCurrentProfile.
+ */
+export function isPerfilOcultoNasListas(
+  p: Pick<Profile, 'email' | 'nome_exibicao'> | { email?: string | null; nome_exibicao?: string | null },
+): boolean {
+  const nome = String(p.nome_exibicao ?? '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '');
+  const email = String(p.email ?? '')
+    .trim()
+    .toLowerCase();
+
+  if (/\(debugs?\)/.test(nome)) return true;
+  if (nome.includes('pedro bossle') && nome.includes('debug')) return true;
+  if (email.includes('+debug') || email.startsWith('debug@')) return true;
+  return false;
+}
+
+function mapProfile(d: {
+  user_id: string;
+  email: string;
+  nome_exibicao: string | null;
+  is_admin: boolean;
+  ativo: boolean;
+  permissions: PermissionsMap | null;
+}): Profile {
+  return {
+    user_id: d.user_id,
+    email: d.email,
+    nome_exibicao: d.nome_exibicao,
+    is_admin: Boolean(d.is_admin),
+    ativo: Boolean(d.ativo),
+    permissions: (d.permissions as PermissionsMap) ?? {},
+  };
+}
+
 export async function fetchCurrentProfile(): Promise<Profile | null> {
   const { data: sessao } = await supabase.auth.getSession();
   const uid = sessao?.session?.user?.id;
@@ -25,14 +66,7 @@ export async function fetchCurrentProfile(): Promise<Profile | null> {
   if (!data) return null;
   if (!data.ativo) return null;
 
-  return {
-    user_id: data.user_id,
-    email: data.email,
-    nome_exibicao: data.nome_exibicao,
-    is_admin: Boolean(data.is_admin),
-    ativo: Boolean(data.ativo),
-    permissions: (data.permissions as PermissionsMap) ?? {},
-  };
+  return mapProfile(data);
 }
 
 export async function fetchProfiles(): Promise<Profile[]> {
@@ -41,14 +75,9 @@ export async function fetchProfiles(): Promise<Profile[]> {
     .select('user_id, email, nome_exibicao, is_admin, ativo, permissions')
     .order('email');
   if (error) throw new Error(error.message);
-  return (data ?? []).map((d) => ({
-    user_id: d.user_id,
-    email: d.email,
-    nome_exibicao: d.nome_exibicao,
-    is_admin: Boolean(d.is_admin),
-    ativo: Boolean(d.ativo),
-    permissions: (d.permissions as PermissionsMap) ?? {},
-  }));
+  return (data ?? [])
+    .map(mapProfile)
+    .filter((p) => !isPerfilOcultoNasListas(p));
 }
 
 export async function upsertProfile(input: {

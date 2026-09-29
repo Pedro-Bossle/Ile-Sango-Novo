@@ -1,0 +1,146 @@
+/* Mensalidades — gaps (extras / scroll / incluir) */
+
+.dash-mens__forma {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: 0.82rem;
+  color: #6b635c;
+}
+
+.dash-mens__forma select {
+  min-height: 40px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #d7cdc4;
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  color: #3d342e;
+}
+
+.dash-mens__extras {
+  position: relative;
+  align-self: flex-end;
+}
+
+.dash-mens__extras-menu {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  z-index: 20;
+  min-width: 12rem;
+  padding: 0.45rem;
+  background: #fff;
+  border: 1px solid #e4d8ca;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(42, 33, 26, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.dash-mens__extras-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.9rem;
+  color: #3d342e;
+  cursor: pointer;
+}
+
+.dash-mens__extras-lote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dash-mens__extras-lote-action {
+  width: 100%;
+}
+
+.dash-mens__scroll {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dash-mens__incluir-row td,
+.dash-mens__incluir-cell {
+  background: #faf8f6;
+  border-top: 1px dashed #e1d9d1;
+  padding: 0.55rem 0.75rem;
+  vertical-align: middle;
+}
+
+.dash-mens__table tfoot .dash-mens__incluir-cell {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  box-shadow: 0 -1px 0 #e1d9d1;
+}
+
+.dash-mens__incluir-link {
+  border: none;
+  background: transparent;
+  color: var(--bordo, #530526);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.35rem 0;
+  text-align: left;
+}
+
+.dash-mens__incluir-link:hover {
+  text-decoration: underline;
+}
+
+.dash-mens__incluir-foot {
+  margin: 0;
+  padding: 0.55rem 0.85rem;
+  border: 1px solid #e1d9d1;
+  border-radius: 10px;
+  background: #faf8f6;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-shrink: 0;
+}
+
+.dash-mens__incluir-foot .dash-mens__incluir,
+.dash-mens__incluir-cell .dash-mens__incluir {
+  width: 100%;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.dash-mens__cards .dash-mens__incluir-foot {
+  margin-top: 0.25rem;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.35rem 0.15rem 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: #f7f5f3;
+}
+
+/* Popover em portal (body) — não herda absolute/transform do .dash-mens__pop */
+.dash-mens__pop--portal {
+  position: fixed !important;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  transform: none !important;
+  z-index: 10050;
+  min-width: 10.5rem;
+}

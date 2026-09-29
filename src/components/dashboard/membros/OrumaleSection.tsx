@@ -12,6 +12,8 @@ import {
   type HistoricoOrumaleItem,
 } from '../../../services/orumaleHistorico';
 import { formatDateBR } from '../../../utils/formatDate';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
+import { useConfirmAction } from '../ConfirmActionModal';
 
 type Props = {
   orixas: Orixa[];
@@ -42,6 +44,7 @@ function OrumaleRowEditor({ row, orixas, removeRow, updateRow }: RowEditorProps)
   const [historyEditId, setHistoryEditId] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historySuccess, setHistorySuccess] = useState<string | null>(null);
+  const { ask: askConfirm, modal: confirmModal } = useConfirmAction();
 
   const orixaId = String(row.orixa_id ?? '');
   const qualidadeId = String(row.qualidade_id ?? '');
@@ -185,35 +188,57 @@ function OrumaleRowEditor({ row, orixas, removeRow, updateRow }: RowEditorProps)
   };
 
   const handleExcluirHistorico = (id: string) => {
-    setHistorySaving(true);
-    setHistoryError(null);
-    setHistorySuccess(null);
-    void excluirHistoricoOrumale(id)
-      .then(() => {
-        setHistoryItems((prev) => prev.filter((item) => item.id !== id));
-        if (historyEditId === id) {
-          setHistoryEditId(null);
-          setHistoryDate('');
-          setHistoryDescricao('');
-        }
-        setHistorySuccess('Histórico excluído com sucesso.');
-      })
-      .catch((e) => {
-        setHistoryError(e instanceof Error ? e.message : 'Erro ao excluir histórico.');
-      })
-      .finally(() => {
-        setHistorySaving(false);
+    void (async () => {
+      const ok = await askConfirm({
+        title: 'Confirmar exclusão',
+        message: 'Excluir este registro do histórico?',
+        confirmLabel: 'Excluir',
       });
+      if (!ok) return;
+      setHistorySaving(true);
+      setHistoryError(null);
+      setHistorySuccess(null);
+      void excluirHistoricoOrumale(id)
+        .then(() => {
+          setHistoryItems((prev) => prev.filter((item) => item.id !== id));
+          if (historyEditId === id) {
+            setHistoryEditId(null);
+            setHistoryDate('');
+            setHistoryDescricao('');
+          }
+          setHistorySuccess('Histórico excluído com sucesso.');
+        })
+        .catch((e) => {
+          setHistoryError(e instanceof Error ? e.message : 'Erro ao excluir histórico.');
+        })
+        .finally(() => {
+          setHistorySaving(false);
+        });
+    })();
+  };
+
+  const pedirRemoverLinha = () => {
+    void (async () => {
+      const ok = await askConfirm({
+        title: 'Remover linha',
+        message: 'Remover esta linha de Orumalê do formulário?',
+        confirmLabel: 'Remover',
+        confirmingLabel: 'Removendo…',
+      });
+      if (!ok) return;
+      removeRow(row.key);
+    })();
   };
 
   return (
     <div key={row.key} className="dash-dynamic-block">
+      {confirmModal}
       <div className="dash-dynamic-block__toolbar">
         <button
           type="button"
           className="dash-icon-remove"
           aria-label="Remover linha"
-          onClick={() => removeRow(row.key)}
+          onClick={pedirRemoverLinha}
         >
           ×
         </button>
@@ -287,7 +312,12 @@ function OrumaleRowEditor({ row, orixas, removeRow, updateRow }: RowEditorProps)
       </div>
 
       {historyOpen && (
-        <div className="dash-modal-overlay" role="dialog" aria-modal="true">
+        <div
+          className="dash-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          onClick={onModalOverlayClick(() => !historySaving && setHistoryOpen(false))}
+        >
           <div className="dash-modal">
             <h2>Histórico do Orumalé</h2>
             <p className="dash-muted">Registros por data em ordem decrescente.</p>

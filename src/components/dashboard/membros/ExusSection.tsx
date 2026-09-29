@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ExuFormRow } from '../../../hooks/useMemberForm';
+import { useConfirmAction } from '../ConfirmActionModal';
 
 type Props = {
   rows: ExuFormRow[];
@@ -11,9 +12,36 @@ type Props = {
 
 export function ExusSection({ rows, addRow, removeRow, updateRow, reorderRows }: Props) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const { ask: askConfirm, modal: confirmModal } = useConfirmAction();
+
+  const pedirRemover = (key: string, nome: string) => {
+    void (async () => {
+      const ok = await askConfirm({
+        title: 'Remover linha',
+        message: (
+          <>
+            Remover{nome.trim() ? (
+              <>
+                {' '}
+                <strong>{nome.trim()}</strong>
+              </>
+            ) : (
+              ' esta linha'
+            )}{' '}
+            de Exus do formulário?
+          </>
+        ),
+        confirmLabel: 'Remover',
+        confirmingLabel: 'Removendo…',
+      });
+      if (!ok) return;
+      removeRow(key);
+    })();
+  };
 
   return (
     <section className="dash-form-section">
+      {confirmModal}
       <div className="dash-form-section__head">
         <h2 className="dash-form-section__title">Exus</h2>
         <button type="button" className="dash-btn-secondary dash-btn-min" onClick={addRow}>
@@ -40,7 +68,7 @@ export function ExusSection({ rows, addRow, removeRow, updateRow, reorderRows }:
             <span>Nome</span>
             <input
               type="text"
-              placeholder="Exu nome"
+              placeholder="Nome"
               value={row.exu_nome}
               onChange={(e) => updateRow(row.key, { exu_nome: e.target.value })}
             />
@@ -75,7 +103,7 @@ export function ExusSection({ rows, addRow, removeRow, updateRow, reorderRows }:
             type="button"
             className="dash-icon-remove dash-dynamic-block__remove"
             aria-label="Remover linha"
-            onClick={() => removeRow(row.key)}
+            onClick={() => pedirRemover(row.key, row.exu_nome)}
           >
             ×
           </button>

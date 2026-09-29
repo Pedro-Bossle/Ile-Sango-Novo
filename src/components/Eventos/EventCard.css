@@ -140,6 +140,22 @@
   font-weight: 500;
 }
 
+.event-card-compact__meta-val--maps {
+  color: var(--bordo);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+  text-decoration-thickness: 1px;
+  cursor: pointer;
+  transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.event-card-compact__meta-val--maps:hover,
+.event-card-compact__meta-val--maps:focus-visible {
+  color: var(--vermelho, #8b1a1a);
+  opacity: 0.9;
+  outline: none;
+}
+
 @media (min-width: 960px) {
   .event-card-compact__icon-wrap {
     width: 56px;

@@ -1,12 +1,15 @@
 import { supabase } from '../lib/supabaseClient';
 import type { Cobranca, CobrancaTipo, PagamentoHistorico, Pessoa, UUID } from '../types/database';
 import { resolvePessoaIdCobranca } from '../types/database';
+import { fetchMapaOrixaCabeca } from './membros';
 
 export type CobrancaComMembro = Cobranca & {
   membro_nome: string;
   membro_contato?: string | null;
   membro_email?: string | null;
   membro_data_entrada?: string | null;
+  membro_orixa_cabeca_nome?: string | null;
+  membro_orixa_cabeca_qualidade_nome?: string | null;
 };
 
 const COBRANCA_SELECT =
@@ -72,11 +75,101 @@ export function isCobrancaPendente(c: Cobranca): boolean {
 }
 
 export function isObrigacaoTipo(c: Cobranca): boolean {
-  return c.tipo === 'obrigacao';
+  const t = String(c.tipo ?? '').trim().toLowerCase();
+  return t === 'obrigacao' || t === 'cobrança' || t === 'cobranca';
 }
 
 export function isMensalidadeTipo(c: Cobranca): boolean {
-  return c.tipo === 'mensalidade';
+  return String(c.tipo ?? '').trim().toLowerCase() === 'mensalidade';
+}
+
+/** Qualquer cobrança (exceto mensalidade) pode ter pagamento parcial / progresso. */
+export function cobrancaPermiteParcelamento(c: Cobranca): boolean {
+  return !isMensalidadeTipo(c);
+}
+
+function addMonthsIso(isoDate: string, months: number): string {
+  const [y, m, d] = isoDate.slice(0, 10).split('-').map(Number);
+  const dt = new Date(y, m - 1 + months, d);
+  // Evita estouro de mês (ex.: 31 jan + 1 → fev)
+  const targetMonth = (m - 1 + months) % 12;
+  const normalizedMonth = targetMonth < 0 ? targetMonth + 12 : targetMonth;
+  if (dt.getMonth() !== normalizedMonth) {
+    dt.setDate(0);
+  }
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+export type CobrancaInput = {
+  pessoa_id: UUID;
+  membro_nome: string;
+  valor: string | number;
+  data: string | null;
+  descricao: string | null;
+  tipo: CobrancaTipo;
+  /** Nº de parcelas na criação (1 = única). */
+  parcelas?: number;
+  /** Venda (orçamento) de origem — evita cobrança duplicada. */
+  orcamento_id?: UUID | null;
+};
+
+export async function insertCobranca(input: CobrancaInput): Promise<void> {
+  const nRaw = Number(input.parcelas ?? 1);
+  const n = Number.isFinite(nRaw) ? Math.min(48, Math.max(1, Math.floor(nRaw))) : 1;
+  const total = Number(input.valor);
+  if (!Number.isFinite(total) || total < 0) {
+    throw new Error('Informe um valor válido.');
+  }
+  if (!input.data) {
+    throw new Error('Informe o vencimento.');
+  }
+
+  const baseCents = Math.floor(Math.round(total * 100) / n);
+  const valores: number[] = [];
+  let allocated = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (i === n - 1) {
+      valores.push(Math.round(total * 100 - allocated) / 100);
+    } else {
+      valores.push(baseCents / 100);
+      allocated += baseCents;
+    }
+  }
+
+  const baseDesc = (input.descricao ?? '').trim();
+  const rows = valores.map((valorParcela, idx) => {
+    const parcelaLabel = n > 1 ? ` (${idx + 1}/${n})` : '';
+    const descricao = baseDesc
+      ? `${baseDesc}${parcelaLabel}`
+      : n > 1
+        ? `Parcela ${idx + 1}/${n}`
+        : null;
+    return {
+      pessoa_id: input.pessoa_id,
+      membro: input.membro_nome,
+      tipo: input.tipo,
+      valor_total: valorParcela,
+      valor_pago: 0,
+      vencimento: addMonthsIso(input.data!, idx),
+      descricao,
+      valor: valorParcela,
+      ...(input.orcamento_id ? { orcamento_id: input.orcamento_id } : {}),
+    };
+  });
+
+  const { error } = await supabase.from('cobrancas').insert(rows);
+  if (error) {
+    if (error.message.includes('membro_key')) {
+      throw new Error(
+        'A base ainda tem UNIQUE na coluna membro (só permite uma cobrança por nome). ' +
+          'No Supabase, executa o script scripts/supabase_cobrancas_drop_unique_membro.sql para remover essa restrição.',
+      );
+    }
+    throw new Error(error.message);
+  }
 }
 
 export async function fetchCobrancasComMembros(): Promise<CobrancaComMembro[]> {
@@ -91,16 +184,20 @@ export async function fetchCobrancasComMembros(): Promise<CobrancaComMembro[]> {
   const contatos = new Map(pessoasList.map((p) => [p.id, p.contato]));
   const emails = new Map(pessoasList.map((p) => [p.id, p.email]));
   const entradas = new Map(pessoasList.map((p) => [p.id, p.data_entrada ?? null]));
+  const cabecaMap = await fetchMapaOrixaCabeca(pessoasList.map((p) => p.id));
   const rows = (cobrancas ?? []) as Cobranca[];
   return rows.map((c) => {
     const pid = resolvePessoaIdCobranca(c);
     const membro_nome = c.membro || (pid ? nomes.get(pid) : undefined) || 'Membro não informado';
+    const cabeca = pid ? cabecaMap.get(pid) : undefined;
     return {
       ...c,
       membro_nome,
       membro_contato: pid ? contatos.get(pid) ?? null : null,
       membro_email: pid ? emails.get(pid) ?? null : null,
       membro_data_entrada: pid ? entradas.get(pid) ?? null : null,
+      membro_orixa_cabeca_nome: cabeca?.orixa_cabeca_nome ?? null,
+      membro_orixa_cabeca_qualidade_nome: cabeca?.orixa_cabeca_qualidade_nome ?? null,
     };
   });
 }
@@ -121,39 +218,6 @@ export function pessoaEstaDevendo(pessoaId: UUID, cobrancas: Cobranca[]): boolea
     const pid = resolvePessoaIdCobranca(c);
     return pid === pessoaId && isCobrancaPendente(c);
   });
-}
-
-export type CobrancaInput = {
-  pessoa_id: UUID;
-  membro_nome: string;
-  valor: string | number;
-  data: string | null;
-  descricao: string | null;
-  tipo: CobrancaTipo;
-};
-
-export async function insertCobranca(input: CobrancaInput): Promise<void> {
-  const total = Number(input.valor);
-  const payload: Record<string, unknown> = {
-    pessoa_id: input.pessoa_id,
-    membro: input.membro_nome,
-    tipo: input.tipo,
-    valor_total: total,
-    valor_pago: 0,
-    vencimento: input.data,
-    descricao: input.descricao,
-    valor: total,
-  };
-  const { error } = await supabase.from('cobrancas').insert(payload);
-  if (error) {
-    if (error.message.includes('membro_key')) {
-      throw new Error(
-        'A base ainda tem UNIQUE na coluna membro (só permite uma cobrança por nome). ' +
-          'No Supabase, executa o script scripts/supabase_cobrancas_drop_unique_membro.sql para remover essa restrição.',
-      );
-    }
-    throw new Error(error.message);
-  }
 }
 
 export async function updateCobranca(id: string | number, input: CobrancaInput): Promise<void> {
@@ -200,6 +264,42 @@ export async function registrarPagamento(
     obs: obs?.trim() ? obs.trim() : null,
   });
   if (error) throw new Error(error.message);
+  await softDeleteCobrancaSeQuitada(cobrancaId);
+}
+
+/** Se o saldo zerar, remove a cobrança da lista (soft-delete). */
+export async function softDeleteCobrancaSeQuitada(cobrancaId: string | number): Promise<void> {
+  const { data, error } = await supabase
+    .from('cobrancas')
+    .select('id, valor, valor_total, valor_pago, valor_saldo, deleted_at')
+    .eq('id', Number(cobrancaId))
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data || data.deleted_at) return;
+  if (valorSaldoCobranca(data as Cobranca) > 0.0001) return;
+  const { error: delErr } = await supabase
+    .from('cobrancas')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', Number(cobrancaId))
+    .is('deleted_at', null);
+  if (delErr) throw new Error(delErr.message);
+}
+
+/** Se voltar a ter saldo (ex.: excluiu pagamento), restaura na lista. */
+export async function restoreCobrancaSeReabriu(cobrancaId: string | number): Promise<void> {
+  const { data, error } = await supabase
+    .from('cobrancas')
+    .select('id, valor, valor_total, valor_pago, valor_saldo, deleted_at')
+    .eq('id', Number(cobrancaId))
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.deleted_at) return;
+  if (valorSaldoCobranca(data as Cobranca) <= 0.0001) return;
+  const { error: upErr } = await supabase
+    .from('cobrancas')
+    .update({ deleted_at: null })
+    .eq('id', Number(cobrancaId));
+  if (upErr) throw new Error(upErr.message);
 }
 
 export async function buscarHistoricoPagamentos(cobrancaId: string | number): Promise<PagamentoHistorico[]> {
@@ -210,6 +310,23 @@ export async function buscarHistoricoPagamentos(cobrancaId: string | number): Pr
     .order('data_pagamento', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []) as PagamentoHistorico[];
+}
+
+/** Remove pagamento do histórico; trigger atualiza valor_pago e o caixa (CASCADE). */
+export async function excluirPagamentoCobranca(pagamentoId: string): Promise<void> {
+  const { data: pag, error: fetchErr } = await supabase
+    .from('cobranca_pagamentos')
+    .select('id, cobranca_id')
+    .eq('id', pagamentoId)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+
+  const { error } = await supabase.from('cobranca_pagamentos').delete().eq('id', pagamentoId);
+  if (error) throw new Error(error.message);
+
+  if (pag?.cobranca_id != null) {
+    await restoreCobrancaSeReabriu(pag.cobranca_id);
+  }
 }
 
 export type FiltrosRelatorioValoresPagos = {
@@ -281,7 +398,8 @@ export async function fetchRelatorioValoresPagos(
   return pagamentos
     .filter((p) => {
       const cobranca = mapCobrancas.get(Number(p.cobranca_id));
-      if (!cobranca || cobranca.deleted_at) return false;
+      if (!cobranca) return false;
+      // Inclui cobranças soft-deletadas (quitadas saem da lista, mas entram no relatório de pagos).
       if (filtros.tipo && cobranca.tipo !== filtros.tipo) return false;
       return true;
     })

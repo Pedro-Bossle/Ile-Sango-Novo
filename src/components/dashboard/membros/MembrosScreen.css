@@ -1,0 +1,55 @@
+/* Membros — toolbar / filtros da lista */
+
+.dash-membros-head .dash-page-head__actions {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dash-membros-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: stretch;
+  margin: 0 0 1rem;
+}
+
+.dash-membros-toolbar__busca {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid #d7cdc4;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.dash-membros-status-filtro {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.dash-membros-status-filtro select {
+  min-height: 44px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d7cdc4;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  color: #3d342e;
+}
+
+.dash-membros-status-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #6b635c;
+}
+
+.dash-membro-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}

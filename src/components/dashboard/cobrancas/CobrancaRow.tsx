@@ -1,187 +1,158 @@
 import { useState } from 'react';
 import {
   isCobrancaPendente,
-  isMensalidadeTipo,
-  isObrigacaoTipo,
   progressoPagamentoObrigacao,
   valorPagoCobranca,
   valorSaldoCobranca,
   valorTotalCobranca,
   type CobrancaComMembro,
 } from '../../../services/cobrancas';
-import { formatDateBR } from '../../../utils/formatDate';
 import { RegistrarPagamentoModal } from './RegistrarPagamentoModal';
 import { HistoricoPagamentosModal } from './HistoricoPagamentosModal';
 
 type Props = {
   cobranca: CobrancaComMembro;
-  selected: boolean;
-  onSelect: (id: string | number, checked: boolean) => void;
   onEdit: (c: CobrancaComMembro) => void;
   onDelete: (c: CobrancaComMembro) => void;
   onRefresh: () => void;
-  onWhatsApp?: (c: CobrancaComMembro) => void;
-  onEmail?: (c: CobrancaComMembro) => void;
-  canSend?: boolean;
+  /** Quando dentro de um grupo por membro, oculta o nome repetido. */
+  hideNome?: boolean;
 };
 
-function badgeTipo(t: string | null | undefined): { label: string; className: string } {
-  if (t === 'mensalidade') return { label: 'Mensalidade', className: 'dash-badge-tipo dash-badge-tipo--mensalidade' };
-  if (t === 'obrigacao') return { label: 'Obrigação', className: 'dash-badge-tipo dash-badge-tipo--obrigacao' };
-  if (t === 'outros') return { label: 'Outros', className: 'dash-badge-tipo dash-badge-tipo--outros' };
-  return { label: t?.trim() ? String(t) : '—', className: 'dash-badge-tipo' };
+function money(n: number) {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2 });
 }
 
-export function CobrancaRow({
-  cobranca,
-  selected,
-  onSelect,
-  onEdit,
-  onDelete,
-  onRefresh,
-  onWhatsApp,
-  onEmail,
-  canSend = false,
-}: Props) {
+function hojeIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Status de UI: alinhado ao filtro da tela (`em_aberto` | `atrasada` | `pago`). */
+export function statusCobrancaUi(c: CobrancaComMembro): 'em_aberto' | 'atrasada' | 'pago' {
+  if (!isCobrancaPendente(c)) return 'pago';
+  const venc = (c.vencimento ?? '').slice(0, 10);
+  if (venc && venc < hojeIso()) return 'atrasada';
+  return 'em_aberto';
+}
+
+function statusBadge(c: CobrancaComMembro): { key: 'atrasada' | 'aberta' | 'pago'; label: string } {
+  const ui = statusCobrancaUi(c);
+  if (ui === 'pago') return { key: 'pago', label: 'Pago' };
+  if (ui === 'atrasada') return { key: 'atrasada', label: 'Atrasada' };
+  return { key: 'aberta', label: 'Em aberto' };
+}
+
+export function CobrancaRow({ cobranca, onEdit, onDelete, onRefresh, hideNome = false }: Props) {
   const [registrarOpen, setRegistrarOpen] = useState(false);
   const [historicoOpen, setHistoricoOpen] = useState(false);
 
   const total = valorTotalCobranca(cobranca);
   const pago = valorPagoCobranca(cobranca);
   const saldo = valorSaldoCobranca(cobranca);
-  const mensalidade = isMensalidadeTipo(cobranca);
-  const obrigacao = isObrigacaoTipo(cobranca);
-  const pct = obrigacao ? progressoPagamentoObrigacao(cobranca) * 100 : 0;
-  const tipoBadge = badgeTipo(cobranca.tipo);
+  const pct = Math.round(progressoPagamentoObrigacao(cobranca) * 100);
+  const status = statusBadge(cobranca);
   const pendente = isCobrancaPendente(cobranca);
-
-  const dataCriacao = formatDateBR(cobranca.created_at ?? null);
+  const nome = cobranca.membro_nome || cobranca.membro || 'Membro';
+  const desc = (cobranca.descricao || '').trim() || 'Sem descrição';
 
   return (
     <>
-      <tr className={selected ? 'dash-cob-row--selected' : undefined}>
-        <td className="dash-cob-select-col">
-          <input
-            type="checkbox"
-            checked={selected}
-            onChange={(e) => onSelect(cobranca.id, e.target.checked)}
-            aria-label={`Selecionar cobrança de ${cobranca.membro_nome}`}
-          />
-        </td>
-        <td className="dash-cob-criacao">{dataCriacao}</td>
-        <td>{formatDateBR(cobranca.vencimento)}</td>
-        <td>{cobranca.membro_nome}</td>
-        <td>
-          <span className={tipoBadge.className}>{tipoBadge.label}</span>
-        </td>
-        <td className="dash-cob-valores">
-          {obrigacao ? (
-            <>
-              <div className="dash-cob-valores__line">
-                <span>Total</span> <strong>R$ {total.toFixed(2)}</strong>
-              </div>
-              <div className="dash-cob-valores__line">
-                <span>Pago</span> <strong>R$ {pago.toFixed(2)}</strong>
-              </div>
-              <div className="dash-cob-valores__line">
-                <span>Saldo</span> <strong>R$ {saldo.toFixed(2)}</strong>
-              </div>
-              <p className="dash-cob-progress-meta">
-                R$ {pago.toFixed(2)} / R$ {total.toFixed(2)}
-              </p>
-              <div className="dash-cob-progress" role="progressbar" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
-                <div className="dash-cob-progress__fill" style={{ width: `${Math.min(100, pct)}%` }} />
-              </div>
-            </>
-          ) : mensalidade ? (
-            <div className="dash-cob-valores__line">
-              <strong>R$ {saldo.toFixed(2)}</strong>
-            </div>
-          ) : (
-            <div className="dash-cob-valores__line">
-              <strong>R$ {total.toFixed(2)}</strong>
-            </div>
-          )}
-        </td>
-        <td>{cobranca.descricao || '—'}</td>
-        <td className="dash-cob-acoes">
-          {pendente && obrigacao && (
-            <>
-              <button
-                type="button"
-                className="dash-btn-table"
-                onClick={() => setHistoricoOpen(true)}
-                title="Ver histórico"
-                aria-label="Ver histórico"
-              >
-                📜
-              </button>
-              <button
-                type="button"
-                className="dash-btn-table dash-btn-table--pay"
-                onClick={() => setRegistrarOpen(true)}
-                title="Pagar"
-                aria-label="Pagar"
-              >
-                💵
-              </button>
-            </>
-          )}
-          {pendente && !obrigacao && (
-            <button
-              type="button"
-              className="dash-btn-table dash-btn-table--pay"
-              onClick={() => setRegistrarOpen(true)}
-              title="Pagar"
-              aria-label="Pagar"
-            >
-              💵
-            </button>
-          )}
-          {pendente && canSend && onWhatsApp && (
-            <button
-              type="button"
-              className="dash-btn-table"
-              onClick={() => onWhatsApp(cobranca)}
-              title="WhatsApp"
-              aria-label="WhatsApp cobrança"
-            >
-              WA
-            </button>
-          )}
-          {pendente && canSend && onEmail && (
-            <button
-              type="button"
-              className="dash-btn-table"
-              onClick={() => onEmail(cobranca)}
-              title="E-mail"
-              aria-label="E-mail cobrança"
-            >
-              ✉
-            </button>
-          )}
-          {pendente && (
-            <button
-              type="button"
-              className="dash-btn-table dash-btn-table--edit"
-              onClick={() => onEdit(cobranca)}
-              title="Editar"
-              aria-label="Editar"
-            >
-              🖊️
-            </button>
-          )}
-          <button
-            type="button"
-            className="dash-btn-table dash-btn-table--danger"
-            onClick={() => onDelete(cobranca)}
-            title="Excluir"
-            aria-label="Excluir"
+      <article
+        className={`dash-cob-item${status.key === 'pago' ? ' dash-cob-item--pago' : ''}${
+          hideNome ? ' dash-cob-item--nested' : ''
+        }`}
+      >
+        <div className="dash-cob-item__main">
+          {!hideNome && <h3 className="dash-cob-item__nome">{nome}</h3>}
+          <p className={`dash-cob-item__desc${hideNome ? ' dash-cob-item__desc--lead' : ''}`}>{desc}</p>
+          <p className="dash-cob-item__valores">
+            {money(pago)} de {money(total)} — resta {money(saldo)}
+          </p>
+          <div
+            className="dash-cob-item__bar"
+            role="progressbar"
+            aria-valuenow={pct}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`${pct}% quitado`}
           >
-            🗑️
-          </button>
-        </td>
-      </tr>
+            <div className="dash-cob-item__bar-fill" style={{ width: `${Math.min(100, pct)}%` }} />
+          </div>
+          <p className="dash-cob-item__pct">{pct}% quitado</p>
+        </div>
+
+        <div className="dash-cob-item__side">
+          <span
+            className={`dash-cob-status dash-cob-status--${
+              status.key === 'aberta' ? 'em_aberto' : status.key
+            }`}
+          >
+            {status.label}
+          </span>
+          <div className="dash-cob-item__actions">
+            {pendente && (
+              <button
+                type="button"
+                className="dash-cob-icon-btn"
+                onClick={() => setRegistrarOpen(true)}
+                title="Registrar pagamento"
+                aria-label="Registrar pagamento"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
+                  <path
+                    fill="currentColor"
+                    d="M3 7.5A2.5 2.5 0 0 1 5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9Zm2.5-.5a.5.5 0 0 0-.5.5V9h16V7.5a.5.5 0 0 0-.5-.5h-15ZM21 11H3v5.5a.5.5 0 0 0 .5.5h13a.5.5 0 0 0 .5-.5V11Zm-8 3h5v1.5h-5V14Z"
+                  />
+                </svg>
+              </button>
+            )}
+            <button
+              type="button"
+              className="dash-cob-icon-btn"
+              onClick={() => setHistoricoOpen(true)}
+              title="Histórico"
+              aria-label="Histórico de pagamentos"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
+                <path
+                  fill="currentColor"
+                  d="M12 4a8 8 0 1 1-7.75 10h1.6A6.5 6.5 0 1 0 12 5.5V8l3.5-3.5L12 1v3Zm-.75 4.25v4.1l3.4 2.02.75-1.26-2.65-1.57V8.25h-1.5Z"
+                />
+              </svg>
+            </button>
+            {pendente && (
+              <button
+                type="button"
+                className="dash-cob-icon-btn"
+                onClick={() => onEdit(cobranca)}
+                title="Editar"
+                aria-label="Editar cobrança"
+              >
+                <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
+                  <path
+                    fill="currentColor"
+                    d="M4 17.25V20h2.75L18.8 8.0l-2.75-2.75L4 17.25ZM20.7 6.35a.75.75 0 0 0 0-1.06l-1.99-1.99a.75.75 0 0 0-1.06 0l-1.56 1.56 3.05 3.05 1.56-1.56Z"
+                  />
+                </svg>
+              </button>
+            )}
+            <button
+              type="button"
+              className="dash-cob-icon-btn dash-cob-icon-btn--danger"
+              onClick={() => onDelete(cobranca)}
+              title="Excluir"
+              aria-label="Excluir cobrança"
+            >
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden focusable="false">
+                <path
+                  fill="currentColor"
+                  d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1Z"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </article>
 
       <RegistrarPagamentoModal
         open={registrarOpen}
@@ -193,6 +164,7 @@ export function CobrancaRow({
         open={historicoOpen}
         cobranca={cobranca}
         onClose={() => setHistoricoOpen(false)}
+        onChanged={onRefresh}
       />
     </>
   );

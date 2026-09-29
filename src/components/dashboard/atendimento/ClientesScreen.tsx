@@ -15,12 +15,20 @@ import {
   type MembroMatch,
 } from '../../../services/atendimento';
 import { fetchConfigIle } from '../../../services/configIle';
-import { buildMailtoLink, buildWaMeLink, openExternal } from '../../../utils/whatsappLink';
+import { enviarEmail } from '../../../services/enviarEmail';
+import { buildWaMeLink, openExternal } from '../../../utils/whatsappLink';
+import { saudacaoFilhoSanto } from '../../../utils/saudacaoFilhoSanto';
+import { matchesSearchFields } from '../../../utils/searchFold';
 import { formatarTelefoneMascara, somenteDigitosTelefone } from '../../../utils/telefone';
-import { formatMoneyBRL, parseValorInput, sanitizeValorInput } from '../../../utils/money';
+import { formatMoneyBRL, parseValorInput, sanitizeValorInput, valorToMaskedInput } from '../../../utils/money';
 import { formatDateBR } from '../../../utils/formatDate';
 import { baixarReciboAtendimento } from '../../../utils/reciboAtendimento';
 import { writeAuditLog, buildAuditDiff } from '../../../services/auditLog';
+import { fetchOrcamentos, softDeleteOrcamento, saveCompromisso, type Orcamento } from '../../../services/orcamentosAgenda';
+import { supabase } from '../../../lib/supabaseClient';
+import { onModalOverlayClick } from '../../../utils/modalOverlay';
+import { useConfirmAction } from '../ConfirmActionModal';
+import { OrcamentoModal } from './OrcamentoModal';
 import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { Toast } from '../Toast';
 
@@ -52,8 +60,7 @@ type VisitaPagoFiltro = 'todos' | 'pago' | 'aberto';
 type VisitaOrdem = 'recente' | 'antigo';
 
 function valorToInput(n: number | null | undefined): string {
-  if (n == null || !Number.isFinite(Number(n))) return '';
-  return String(Number(n)).replace('.', ',');
+  return valorToMaskedInput(n);
 }
 
 type Props = {
@@ -62,8 +69,11 @@ type Props = {
   canDelete?: boolean;
   canSend?: boolean;
   canRestore?: boolean;
-  onNovoOrcamento?: (clienteId: string) => void;
-  onAgendar?: (clienteId: string) => void;
+  /** Permissão para criar/enviar vendas a partir da ficha. */
+  canOrcamento?: boolean;
+  canSendOrcamento?: boolean;
+  /** Abre comanda ao vivo para o cliente. */
+  onAbrirAtendimento?: (clienteId: string) => void;
 };
 
 export function ClientesScreen({
@@ -72,8 +82,9 @@ export function ClientesScreen({
   canDelete = true,
   canSend = true,
   canRestore = false,
-  onNovoOrcamento,
-  onAgendar,
+  canOrcamento = true,
+  canSendOrcamento = true,
+  onAbrirAtendimento,
 }: Props) {
   const [lista, setLista] = useState<Cliente[]>([]);
   const [membros, setMembros] = useState<MembroMatch[]>([]);
@@ -91,7 +102,8 @@ export function ClientesScreen({
   const [deletingVisita, setDeletingVisita] = useState(false);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
   const [sheet, setSheet] = useState<'cliente' | 'visita' | null>(null);
-  const [clienteAba, setClienteAba] = useState<'ficha' | 'acoes' | 'visitas'>('ficha');
+  const [orcamentoOpen, setOrcamentoOpen] = useState(false);
+  const [orcamentosCliente, setOrcamentosCliente] = useState<Orcamento[]>([]);
   const [pix, setPix] = useState('');
   const [pixTipo, setPixTipo] = useState<string | null>(null);
   const [pixQr, setPixQr] = useState<string | null>(null);
@@ -107,10 +119,12 @@ export function ClientesScreen({
   });
   const [visitaForm, setVisitaForm] = useState({
     data: new Date().toISOString().slice(0, 10),
+    hora: '09:00',
     resumo: '',
     valor: '',
     pago: false,
   });
+  const { ask: askConfirm, modal: confirmModal } = useConfirmAction();
 
   const reload = async () => {
     const [rows, mems] = await Promise.all([fetchClientes(verExcluidos), fetchMembrosParaMatch()]);
@@ -142,14 +156,16 @@ export function ClientesScreen({
   }, [verExcluidos]);
 
   const filtrados = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     const qDigits = somenteDigitosTelefone(busca);
     return lista.filter((c) => {
       if (soEmAberto && !(abertos[c.id] > 0)) return false;
-      if (!q) return true;
-      const blob = `${c.nome} ${c.whatsapp ?? ''} ${c.email ?? ''}`.toLowerCase();
+      if (!q && !qDigits) return true;
       const wa = somenteDigitosTelefone(c.whatsapp);
-      return blob.includes(q) || (qDigits.length > 0 && wa.includes(qDigits));
+      return (
+        matchesSearchFields(q, c.nome, c.whatsapp, c.email) ||
+        (qDigits.length > 0 && wa.includes(qDigits))
+      );
     });
   }, [lista, busca, soEmAberto, abertos]);
 
@@ -164,13 +180,19 @@ export function ClientesScreen({
   const isFilhoDeSanto = (c: Cliente) => Boolean(clienteEhFilhoDeSanto(c, membros));
 
   const visitasFiltradas = useMemo(() => {
-    const q = visitaBusca.trim().toLowerCase();
+    const q = visitaBusca.trim();
     const rows = visitas.filter((v) => {
       if (visitaPagoFiltro === 'pago' && !v.pago) return false;
       if (visitaPagoFiltro === 'aberto' && v.pago) return false;
       if (!q) return true;
-      const blob = `${v.resumo ?? ''} ${v.data} ${v.valor ?? ''} ${v.pago ? 'pago' : 'aberto'}`.toLowerCase();
-      return blob.includes(q) || formatDateBR(v.data).toLowerCase().includes(q);
+      return matchesSearchFields(
+        q,
+        v.resumo,
+        v.data,
+        String(v.valor ?? ''),
+        v.pago ? 'pago' : 'aberto',
+        formatDateBR(v.data),
+      );
     });
     rows.sort((a, b) => {
       const cmp = String(a.data).localeCompare(String(b.data));
@@ -182,8 +204,9 @@ export function ClientesScreen({
   const backToList = () => {
     setSel(null);
     setVisitas([]);
+    setOrcamentosCliente([]);
+    setOrcamentoOpen(false);
     setSheet(null);
-    setClienteAba('ficha');
     setEditVisitaId(null);
     setDeleteVisita(null);
     setVisitaBusca('');
@@ -193,19 +216,27 @@ export function ClientesScreen({
 
   const openCliente = async (c: Cliente) => {
     setSel(c);
-    setClienteAba('ficha');
     setVisitaBusca('');
     setVisitaPagoFiltro('todos');
     setVisitaOrdem('recente');
     setEditVisitaId(null);
     setDeleteVisita(null);
-    setVisitas(await fetchVisitas(c.id));
+    setOrcamentoOpen(false);
+    const [vs, orcs] = await Promise.all([fetchVisitas(c.id), fetchOrcamentos()]);
+    setVisitas(vs);
+    setOrcamentosCliente(orcs.filter((o) => o.cliente_id === c.id));
+  };
+
+  const reloadOrcamentosCliente = async (clienteId: string) => {
+    const orcs = await fetchOrcamentos();
+    setOrcamentosCliente(orcs.filter((o) => o.cliente_id === clienteId));
   };
 
   const abrirNovaVisita = () => {
     setEditVisitaId(null);
     setVisitaForm({
       data: new Date().toISOString().slice(0, 10),
+      hora: '09:00',
       resumo: '',
       valor: '',
       pago: false,
@@ -217,6 +248,7 @@ export function ClientesScreen({
     setEditVisitaId(v.id);
     setVisitaForm({
       data: v.data.slice(0, 10),
+      hora: '09:00',
       resumo: v.resumo ?? '',
       valor: valorToInput(v.valor),
       pago: v.pago,
@@ -294,17 +326,37 @@ export function ClientesScreen({
         valor: parseValorInput(visitaForm.valor),
         pago: visitaForm.pago,
       });
+
+      if (!wasEdit) {
+        const { data: sessao } = await supabase.auth.getSession();
+        const userId = sessao?.session?.user?.id ?? null;
+        const hora = (visitaForm.hora || '09:00').slice(0, 5);
+        const inicioLocal = new Date(`${visitaForm.data}T${hora}:00`);
+        await saveCompromisso({
+          titulo: visitaForm.resumo.trim() || `Atendimento — ${sel.nome}`,
+          inicio: inicioLocal.toISOString(),
+          cliente_id: sel.id,
+          tipo: 'Atendimento',
+          atribuido_user_id: userId,
+          notas: visitaForm.resumo.trim() || null,
+        });
+      }
+
       setSheet(null);
       setEditVisitaId(null);
       setVisitaForm({
         data: new Date().toISOString().slice(0, 10),
+        hora: '09:00',
         resumo: '',
         valor: '',
         pago: false,
       });
       setVisitas(await fetchVisitas(sel.id));
       await reload();
-      setToast({ msg: wasEdit ? 'Visita atualizada.' : 'Visita registada.', variant: 'success' });
+      setToast({
+        msg: wasEdit ? 'Visita atualizada.' : 'Visita agendada na agenda.',
+        variant: 'success',
+      });
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : 'Erro', variant: 'error' });
     }
@@ -313,20 +365,22 @@ export function ClientesScreen({
   const confirmarExcluirVisita = async () => {
     if (!sel || !deleteVisita) return;
     setDeletingVisita(true);
+    const visitaId = deleteVisita.id;
     try {
-      await softDeleteVisita(deleteVisita.id);
+      setVisitas((prev) => prev.filter((v) => v.id !== visitaId));
+      setDeleteVisita(null);
+      await softDeleteVisita(visitaId);
       await writeAuditLog({
         action: 'delete',
         entity: 'cliente_visitas',
-        entity_id: deleteVisita.id,
+        entity_id: visitaId,
         resumo: `${sel.nome} — ${formatDateBR(deleteVisita.data)}`,
       });
-      setDeleteVisita(null);
-      setVisitas(await fetchVisitas(sel.id));
-      await reload();
       setToast({ msg: 'Visita excluída.', variant: 'success' });
+      void reload();
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : 'Erro', variant: 'error' });
+      if (sel) setVisitas(await fetchVisitas(sel.id));
     } finally {
       setDeletingVisita(false);
     }
@@ -335,7 +389,7 @@ export function ClientesScreen({
   const marcarVisitaPaga = async (v: ClienteVisita) => {
     if (!sel) return;
     try {
-      await saveVisita({ ...v, cliente_id: sel.id, data: v.data, pago: true });
+      await saveVisita({ ...v, cliente_id: sel.id, data: v.data, pago: true, forma_pagamento: v.forma_pagamento || 'Pix' });
       setVisitas(await fetchVisitas(sel.id));
       await reload();
       setToast({ msg: 'Visita marcada como paga.', variant: 'success' });
@@ -345,8 +399,19 @@ export function ClientesScreen({
   };
 
   const excluirCliente = async (c: Cliente) => {
-    if (!window.confirm(`Excluir o cliente “${c.nome}”?`)) return;
+    const ok = await askConfirm({
+      title: 'Confirmar exclusão',
+      message: (
+        <>
+          Excluir o cliente <strong>{c.nome}</strong>?
+        </>
+      ),
+      confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
     try {
+      setLista((prev) => prev.filter((x) => x.id !== c.id));
+      if (sel?.id === c.id) backToList();
       await softDeleteCliente(c.id);
       await writeAuditLog({
         action: 'delete',
@@ -366,11 +431,11 @@ export function ClientesScreen({
           CLIENTE_FIELD_LABELS,
         ),
       });
-      await reload();
-      if (sel?.id === c.id) backToList();
       setToast({ msg: 'Cliente excluído.', variant: 'success' });
+      void reload();
     } catch (err) {
       setToast({ msg: err instanceof Error ? err.message : 'Erro', variant: 'error' });
+      void reload();
     }
   };
 
@@ -393,9 +458,18 @@ export function ClientesScreen({
     }
   };
 
-  const msgCobranca = (c: Cliente, valor: number) =>
-    [
-      `Olá ${c.nome},`,
+  const msgCobranca = (c: Cliente, valor: number) => {
+    const filho = clienteEhFilhoDeSanto(c, membros);
+    const saudacao = filho
+      ? saudacaoFilhoSanto({
+          nome: c.nome,
+          orixaCabeca: filho.orixa_cabeca_nome,
+          qualidadeCabeca: filho.orixa_cabeca_qualidade_nome,
+          fim: ',',
+        })
+      : `Olá ${c.nome},`;
+    return [
+      saudacao,
       '',
       `Lembramos o valor em aberto de ${formatMoneyBRL(valor)} referente a atendimentos em ${ileNome || 'nossa casa'}.`,
       pix ? `Pix: ${pix}` : '',
@@ -404,6 +478,7 @@ export function ClientesScreen({
     ]
       .filter(Boolean)
       .join('\n');
+  };
 
   if (sel) {
     const emAberto = abertos[sel.id] || 0;
@@ -424,124 +499,194 @@ export function ClientesScreen({
       <div className="dash-clientes" data-tour="atendimento-clientes">
         <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
 
-        <div className="dash-split-main__bar">
-          <button type="button" className="dash-btn-secondary" onClick={backToList}>
+        <div className="dash-split-main__bar dash-clientes__detail-bar">
+          <button type="button" className="dash-btn-secondary dash-clientes__voltar" onClick={backToList}>
             ← Voltar à lista
           </button>
-          <h1 className="dash-split-main__title">
-            {sel.nome}
-            {isFilhoDeSanto(sel) && <FilhoDeSantoTag />}
-          </h1>
+          <div className="dash-clientes__detail-head">
+            <h1 className="dash-split-main__title">
+              {sel.nome}
+              {isFilhoDeSanto(sel) && <FilhoDeSantoTag />}
+            </h1>
+            <div className="dash-split-main__bar-actions">
+              {canUpdate && !sel.deleted_at && onAbrirAtendimento && (
+                <button
+                  type="button"
+                  className="dash-btn-primary"
+                  onClick={() => onAbrirAtendimento(sel.id)}
+                >
+                  Atender
+                </button>
+              )}
+              {canUpdate && !sel.deleted_at && (
+                <button
+                  type="button"
+                  className="dash-icon-action"
+                  onClick={abrirEdicaoCliente}
+                  title="Editar cliente"
+                  aria-label="Editar cliente"
+                >
+                  ✎
+                </button>
+              )}
+              {canDelete && !sel.deleted_at && (
+                <button
+                  type="button"
+                  className="dash-icon-action dash-icon-action--danger"
+                  onClick={() => void excluirCliente(sel)}
+                  title="Excluir cliente"
+                  aria-label="Excluir cliente"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
-        <nav className="dash-tabs dash-clientes__tabs" data-tour="atendimento-clientes-abas" aria-label="Secções do cliente">
-          <button type="button" className={clienteAba === 'ficha' ? 'active' : ''} onClick={() => setClienteAba('ficha')}>
-            Ficha
-          </button>
-          <button type="button" className={clienteAba === 'acoes' ? 'active' : ''} onClick={() => setClienteAba('acoes')}>
-            Ações
-          </button>
-          <button
-            type="button"
-            className={clienteAba === 'visitas' ? 'active' : ''}
-            onClick={() => setClienteAba('visitas')}
-          >
-            Visitas{visitas.length ? ` (${visitas.length})` : ''}
-          </button>
-        </nav>
-
         <div className="dash-clientes__detail" data-tour="atendimento-clientes-ficha">
-          {clienteAba === 'ficha' && (
-            <section className="dash-form-section dash-clientes__resumo">
-              <div className="dash-clientes__resumo-grid">
-                <div>
-                  <span className="dash-clientes__label">WhatsApp</span>
-                  <strong>{sel.whatsapp ? formatarTelefoneMascara(sel.whatsapp) : '—'}</strong>
-                </div>
-                <div>
-                  <span className="dash-clientes__label">E-mail</span>
-                  <strong>{sel.email || '—'}</strong>
-                </div>
-                <div>
-                  <span className="dash-clientes__label">Nascimento</span>
-                  <strong>{sel.data_nascimento ? formatDateBR(sel.data_nascimento) : '—'}</strong>
-                </div>
-                <div>
-                  <span className="dash-clientes__label">Em aberto</span>
-                  <strong className={emAberto > 0 ? 'dash-clientes__warn' : undefined}>
-                    {emAberto > 0 ? formatMoneyBRL(emAberto) : 'Nada'}
-                  </strong>
-                </div>
+          <section className="dash-form-section dash-clientes__resumo">
+            <div className="dash-clientes__resumo-grid">
+              <div>
+                <span className="dash-clientes__label">WhatsApp</span>
+                <strong>{sel.whatsapp ? formatarTelefoneMascara(sel.whatsapp) : '—'}</strong>
               </div>
-              {sel.obs && <p className="dash-muted dash-clientes__obs">{sel.obs}</p>}
+              <div>
+                <span className="dash-clientes__label">E-mail</span>
+                <strong>{sel.email || '—'}</strong>
+              </div>
+              <div>
+                <span className="dash-clientes__label">Nascimento</span>
+                <strong>{sel.data_nascimento ? formatDateBR(sel.data_nascimento) : '—'}</strong>
+              </div>
+              <div>
+                <span className="dash-clientes__label">Em aberto</span>
+                <strong className={emAberto > 0 ? 'dash-clientes__warn' : undefined}>
+                  {emAberto > 0 ? formatMoneyBRL(emAberto) : 'Nada'}
+                </strong>
+              </div>
+            </div>
+            {sel.obs && <p className="dash-muted dash-clientes__obs">{sel.obs}</p>}
+          </section>
+
+          {emAberto > 0 && canSend && !sel.deleted_at && (
+            <section className="dash-form-section dash-clientes__cobranca" data-tour="atendimento-clientes-cobranca">
+              <h2 className="dash-form-section__title">Cobrança em aberto</h2>
+              <p className="dash-muted dash-clientes__cobranca-hint">
+                Valor em aberto: <strong className="dash-clientes__warn">{formatMoneyBRL(emAberto)}</strong>
+              </p>
+              <div className="dash-clientes__acoes-grid">
+                <button
+                  type="button"
+                  className="dash-btn-secondary"
+                  onClick={() => openExternal(buildWaMeLink(sel.whatsapp, msgCobranca(sel, emAberto)))}
+                >
+                  Cobrar no WhatsApp
+                </button>
+                <button
+                  type="button"
+                  className="dash-btn-secondary"
+                  onClick={() =>
+                    void (async () => {
+                      if (!sel.email) {
+                        setToast({ msg: 'Cliente sem e-mail cadastrado.', variant: 'error' });
+                        return;
+                      }
+                      try {
+                        await enviarEmail({
+                          to: sel.email,
+                          subject: `Atendimento — ${ileNome || 'Ilê'}`,
+                          title: 'Lembrete de atendimento',
+                          text: msgCobranca(sel, emAberto),
+                        });
+                        setToast({ msg: 'E-mail enviado pelo No-reply.', variant: 'success' });
+                      } catch (e) {
+                        setToast({
+                          msg: e instanceof Error ? e.message : 'Não foi possível enviar o e-mail.',
+                          variant: 'error',
+                        });
+                      }
+                    })()
+                  }
+                >
+                  Cobrar por e-mail
+                </button>
+              </div>
             </section>
           )}
 
-          {clienteAba === 'acoes' && (
-            <section className="dash-form-section dash-clientes__acoes" data-tour="atendimento-clientes-acoes">
-              <h2 className="dash-form-section__title">Ações</h2>
-              {sel.deleted_at ? (
-                <p className="dash-muted">Cliente inativado — restaure na lista para usar as ações.</p>
+          {canOrcamento && !sel.deleted_at && (
+            <section className="dash-form-section dash-clientes__orcamentos" data-tour="atendimento-clientes-orcamentos">
+              <div className="dash-clientes__visitas-head">
+                <h2 className="dash-form-section__title">
+                  Vendas{orcamentosCliente.length ? ` (${orcamentosCliente.length})` : ''}
+                </h2>
+                <button type="button" className="dash-btn-secondary" onClick={() => setOrcamentoOpen(true)}>
+                  + Nova venda
+                </button>
+              </div>
+              {orcamentosCliente.length === 0 ? (
+                <p className="dash-muted">
+                  Nenhuma venda ainda. Abra <strong>+ Nova venda</strong> — o cliente desta ficha já fica
+                  vinculado
+                  {sel.pessoa_id ? ' e, se for filho de santo, gera cobrança ao guardar' : ''}.
+                </p>
               ) : (
-                <div className="dash-clientes__acoes-grid">
-                  {canUpdate && (
-                    <button type="button" className="dash-btn-secondary" onClick={abrirEdicaoCliente}>
-                      Editar
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="dash-btn-secondary"
-                    onClick={() => {
-                      setClienteAba('visitas');
-                      abrirNovaVisita();
-                    }}
-                  >
-                    + Visita
-                  </button>
-                  {onNovoOrcamento && (
-                    <button type="button" className="dash-btn-secondary" onClick={() => onNovoOrcamento(sel.id)}>
-                      Orçamento
-                    </button>
-                  )}
-                  {onAgendar && (
-                    <button type="button" className="dash-btn-secondary" onClick={() => onAgendar(sel.id)}>
-                      Agendar
-                    </button>
-                  )}
-                  {canSend && (
-                    <>
+                <ul className="dash-clientes__orc-lista">
+                  {orcamentosCliente.map((o) => (
+                    <li key={o.id}>
+                      <div>
+                        <strong>{o.titulo || 'Venda'}</strong>
+                        <span className="dash-muted">
+                          {' '}
+                          · {o.status === 'enviado' ? 'Enviado' : o.status === 'rascunho' ? 'Rascunho' : o.status} ·{' '}
+                          {formatMoneyBRL(Number(o.total))}
+                        </span>
+                      </div>
                       <button
                         type="button"
-                        className="dash-btn-secondary"
-                        onClick={() => openExternal(buildWaMeLink(sel.whatsapp, msgCobranca(sel, emAberto)))}
-                      >
-                        WhatsApp
-                      </button>
-                      <button
-                        type="button"
-                        className="dash-btn-secondary"
+                        className="dash-btn-table dash-btn-table--danger"
                         onClick={() =>
-                          openExternal(
-                            buildMailtoLink(sel.email, `Atendimento — ${ileNome || 'Ilê'}`, msgCobranca(sel, emAberto)),
-                          )
+                          void (async () => {
+                            const ok = await askConfirm({
+                              title: 'Confirmar exclusão',
+                              message: (
+                                <>
+                                  Excluir a venda <strong>{o.titulo || 'sem título'}</strong>?
+                                  {sel.pessoa_id
+                                    ? ' Cobranças em aberto desta venda também serão removidas.'
+                                    : ''}
+                                </>
+                              ),
+                              confirmLabel: 'Excluir',
+                            });
+                            if (!ok) return;
+                            const vendaId = o.id;
+                            setOrcamentosCliente((prev) => prev.filter((x) => x.id !== vendaId));
+                            void softDeleteOrcamento(vendaId)
+                              .then(() => {
+                                setToast({ msg: 'Venda excluída.', variant: 'success' });
+                              })
+                              .catch((e) => {
+                                setToast({
+                                  msg: e instanceof Error ? e.message : 'Erro ao excluir.',
+                                  variant: 'error',
+                                });
+                                void reloadOrcamentosCliente(sel.id);
+                              });
+                          })()
                         }
                       >
-                        E-mail
+                        Excluir
                       </button>
-                    </>
-                  )}
-                  {canDelete && (
-                    <button type="button" className="dash-btn-danger-outline" onClick={() => void excluirCliente(sel)}>
-                      Excluir
-                    </button>
-                  )}
-                </div>
+                    </li>
+                  ))}
+                </ul>
               )}
             </section>
           )}
 
-          {sel.deleted_at && canRestore && clienteAba === 'ficha' && (
+          {sel.deleted_at && canRestore && (
             <section className="dash-form-section">
               <p>Este cliente está inativado.</p>
               <button
@@ -561,13 +706,22 @@ export function ClientesScreen({
             </section>
           )}
 
-          {clienteAba === 'visitas' && !sel.deleted_at && (
+          {!sel.deleted_at ? (
             <section className="dash-form-section" data-tour="atendimento-clientes-visitas">
               <div className="dash-clientes__visitas-head">
-                <h2 className="dash-form-section__title">Histórico de visitas</h2>
-                <button type="button" className="dash-btn-secondary" onClick={abrirNovaVisita}>
-                  + Visita
-                </button>
+                <h2 className="dash-form-section__title">
+                  Visitas / agenda{visitas.length ? ` (${visitas.length})` : ''}
+                </h2>
+                <div className="dash-clientes__visitas-head-actions">
+                  {onAbrirAtendimento && (
+                    <button type="button" className="dash-btn-primary" onClick={() => onAbrirAtendimento(sel.id)}>
+                      Atender
+                    </button>
+                  )}
+                  <button type="button" className="dash-btn-secondary" onClick={abrirNovaVisita}>
+                    Agendar visita
+                  </button>
+                </div>
               </div>
 
               {visitas.length > 0 ? (
@@ -669,9 +823,7 @@ export function ClientesScreen({
                 <p className="dash-muted">Nenhuma visita registada ainda.</p>
               )}
             </section>
-          )}
-
-          {clienteAba === 'visitas' && sel.deleted_at && (
+          ) : (
             <section className="dash-form-section">
               <p className="dash-muted">Cliente inativado — o histórico de visitas fica oculto até restaurar.</p>
             </section>
@@ -680,9 +832,24 @@ export function ClientesScreen({
 
         {sheet === 'cliente' && renderClienteSheet()}
         {sheet === 'visita' && renderVisitaSheet()}
+        <OrcamentoModal
+          open={orcamentoOpen}
+          onClose={() => setOrcamentoOpen(false)}
+          initialClienteId={sel.id}
+          clienteNome={sel.nome}
+          clientePessoaId={sel.pessoa_id}
+          lockCliente
+          canSend={canSendOrcamento}
+          onSaved={() => void reloadOrcamentosCliente(sel.id)}
+          onToast={(msg, variant) => setToast({ msg, variant })}
+        />
 
         {deleteVisita && (
-          <div className="dash-modal-overlay" role="presentation" onClick={() => !deletingVisita && setDeleteVisita(null)}>
+          <div
+            className="dash-modal-overlay"
+            role="presentation"
+            onClick={onModalOverlayClick(() => !deletingVisita && setDeleteVisita(null))}
+          >
             <div
               className="dash-modal dash-modal--narrow"
               role="dialog"
@@ -739,7 +906,10 @@ export function ClientesScreen({
 
   function renderClienteSheet() {
     return (
-      <div className="dash-modal-overlay dash-modal-overlay--event-sheet">
+      <div
+        className="dash-modal-overlay dash-modal-overlay--event-sheet"
+        onClick={onModalOverlayClick(() => setSheet(null))}
+      >
         <div className="dash-modal dash-event-sheet">
           <form className="dash-event-sheet__form" onSubmit={salvarCliente}>
             <header className="dash-event-sheet__bar">
@@ -814,30 +984,48 @@ export function ClientesScreen({
   function renderVisitaSheet() {
     if (!sel) return null;
     return (
-      <div className="dash-modal-overlay dash-modal-overlay--event-sheet">
+      <div
+        className="dash-modal-overlay dash-modal-overlay--event-sheet"
+        onClick={onModalOverlayClick(() => {
+          setSheet(null);
+          setEditVisitaId(null);
+        })}
+      >
         <div className="dash-modal dash-event-sheet">
           <form className="dash-event-sheet__form" onSubmit={salvarVisita}>
             <header className="dash-event-sheet__bar">
               <button type="button" className="dash-event-sheet__bar-btn" onClick={() => { setSheet(null); setEditVisitaId(null); }}>
                 Cancelar
               </button>
-              <h2 className="dash-event-sheet__bar-title">{editVisitaId ? 'Editar visita' : 'Nova visita'}</h2>
+              <h2 className="dash-event-sheet__bar-title">{editVisitaId ? 'Editar visita' : 'Agendar visita'}</h2>
               <button type="submit" className="dash-event-sheet__bar-btn dash-event-sheet__bar-btn--primary">
                 Salvar
               </button>
             </header>
             <div className="dash-event-sheet__body">
+              <div className="dash-event-sheet__row">
+                <label className="dash-event-sheet__field">
+                  <span>Data</span>
+                  <input
+                    type="date"
+                    required
+                    value={visitaForm.data}
+                    onChange={(e) => setVisitaForm({ ...visitaForm, data: e.target.value })}
+                  />
+                </label>
+                <label className="dash-event-sheet__field">
+                  <span>Hora</span>
+                  <input
+                    type="time"
+                    required
+                    value={visitaForm.hora}
+                    onChange={(e) => setVisitaForm({ ...visitaForm, hora: e.target.value })}
+                    disabled={Boolean(editVisitaId)}
+                  />
+                </label>
+              </div>
               <label className="dash-event-sheet__field">
-                <span>Data</span>
-                <input
-                  type="date"
-                  required
-                  value={visitaForm.data}
-                  onChange={(e) => setVisitaForm({ ...visitaForm, data: e.target.value })}
-                />
-              </label>
-              <label className="dash-event-sheet__field">
-                <span>O que foi feito</span>
+                <span>O que foi feito / assunto</span>
                 <textarea
                   className="dash-event-sheet__textarea"
                   value={visitaForm.resumo}
@@ -850,7 +1038,7 @@ export function ClientesScreen({
                   inputMode="decimal"
                   value={visitaForm.valor}
                   onChange={(e) => setVisitaForm({ ...visitaForm, valor: sanitizeValorInput(e.target.value) })}
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
                 />
               </label>
               <label className="dash-field dash-field--inline">
@@ -871,6 +1059,7 @@ export function ClientesScreen({
   return (
     <div className="dash-clientes" data-tour="atendimento-clientes">
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
+      {confirmModal}
       <header className="dash-page-head" data-tour="atendimento-clientes-header">
         <div className="dash-page-head__titles">
           <h1>Clientes</h1>
@@ -955,9 +1144,13 @@ export function ClientesScreen({
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <div className="dash-clientes__row-actions">
-                      {!c.deleted_at && (
-                        <button type="button" className="dash-btn-min" onClick={() => void openCliente(c)}>
-                          Abrir
+                      {!c.deleted_at && onAbrirAtendimento && canUpdate && (
+                        <button
+                          type="button"
+                          className="dash-btn-min"
+                          onClick={() => onAbrirAtendimento(c.id)}
+                        >
+                          Atender
                         </button>
                       )}
                       {c.deleted_at && canRestore && (

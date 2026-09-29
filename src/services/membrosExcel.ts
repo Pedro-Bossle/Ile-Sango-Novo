@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabaseClient';
 import { signoFromDate } from '../utils/signo';
 import { somenteDigitosTelefone } from '../utils/telefone';
+import { ensureClienteParaPessoa } from './atendimento';
 
 const HEADERS = [
   'nome',
@@ -116,6 +117,20 @@ export async function importMembrosFromExcel(file: File): Promise<ImportResult> 
         data_feitura_bori: parseDate(r.data_feitura_bori) || null,
         orixa_cabeca_reza: String(r.reza_cabeca ?? '').trim() || null,
       });
+    }
+
+    try {
+      await ensureClienteParaPessoa({
+        id: pessoa.id,
+        nome,
+        data_nascimento: nasc || null,
+        contato: telefone || null,
+        email: email || null,
+        obs: String(r.obs ?? '').trim() || null,
+        deleted_at: null,
+      });
+    } catch {
+      /* trigger no banco cobre; falha aqui não impede o import */
     }
 
     if (email) emails.add(email);

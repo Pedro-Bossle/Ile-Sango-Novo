@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { fetchPessoasOptions, type PessoaOption } from '../../../services/pessoasLookup';
 import type { CobrancaComMembro } from '../../../services/cobrancas';
-import { resolvePessoaIdCobranca, type CobrancaTipo, type UUID } from '../../../types/database';
-import { sanitizeValorInput } from '../../../utils/money';
+import { fetchCaixaCategorias } from '../../../services/caixa';
+import { labelCobrancaTipo, resolvePessoaIdCobranca, type UUID } from '../../../types/database';
+import { sanitizeValorInput, valorToMaskedInput, parseValorInput, formatMoneyBRL } from '../../../utils/money';
 import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 
 export type CobrancaFormValues = {
@@ -10,21 +11,22 @@ export type CobrancaFormValues = {
   data: string;
   valor: string;
   descricao: string;
-  tipo: CobrancaTipo;
+  /** Nome da categoria do fluxo de caixa. */
+  tipo: string;
+  /** Só na criação: divide o valor em N cobranças mensais. */
+  parcelas: string;
 };
+
+const TIPO_PADRAO = 'Cobrança';
 
 const emptyValues = (): CobrancaFormValues => ({
   pessoa_id: '',
   data: '',
   valor: '',
   descricao: '',
-  tipo: 'obrigacao',
+  tipo: TIPO_PADRAO,
+  parcelas: '1',
 });
-
-const TIPO_OPTIONS: SearchableSelectOption[] = [
-  { value: 'obrigacao', label: 'Obrigação' },
-  { value: 'outros', label: 'Outros' },
-];
 
 type Props = {
   open: boolean;
@@ -35,39 +37,54 @@ type Props = {
 
 export function CobrancaForm({ open, initial, onClose, onSave }: Props) {
   const [pessoas, setPessoas] = useState<PessoaOption[]>([]);
+  const [categorias, setCategorias] = useState<SearchableSelectOption[]>([]);
   const [values, setValues] = useState<CobrancaFormValues>(emptyValues);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    fetchPessoasOptions()
-      .then((p) => {
-        if (!cancelled) setPessoas(p);
+    Promise.all([fetchPessoasOptions(), fetchCaixaCategorias()])
+      .then(([p, cats]) => {
+        if (cancelled) return;
+        setPessoas(p);
+        const entrada = cats.filter(
+          (c) => (c.tipo === 'entrada' || c.tipo === 'ambos') && c.nome.toLowerCase() !== 'mensalidade',
+        );
+        const opts = entrada.map((c) => ({ value: c.nome, label: c.nome }));
+        setCategorias(opts);
+        if (!initial) {
+          const prefer =
+            opts.find((o) => o.value === 'Obrigação')?.value ||
+            opts.find((o) => o.value === 'Cobrança')?.value ||
+            opts.find((o) => o.value === 'Outro')?.value ||
+            opts[0]?.value ||
+            TIPO_PADRAO;
+          setValues((v) => ({ ...v, tipo: prefer }));
+        }
       })
       .catch(() => {
-        if (!cancelled) setPessoas([]);
+        if (!cancelled) {
+          setPessoas([]);
+          setCategorias([{ value: TIPO_PADRAO, label: TIPO_PADRAO }]);
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, initial]);
 
   useEffect(() => {
     if (!open) return;
     if (initial) {
       const pid = (resolvePessoaIdCobranca(initial) ?? '') as UUID;
-      const tipoRaw = initial.tipo;
-      const tiposValidos: CobrancaTipo[] = ['obrigacao', 'outros'];
-      const tipo: CobrancaTipo = tiposValidos.includes(tipoRaw as CobrancaTipo)
-        ? (tipoRaw as CobrancaTipo)
-        : 'obrigacao';
       setValues({
         pessoa_id: pid,
         data: initial.vencimento ?? '',
-        valor: String(initial.valor_total ?? initial.valor ?? ''),
+        valor: valorToMaskedInput(Number(initial.valor_total ?? initial.valor ?? 0)),
         descricao: initial.descricao ?? '',
-        tipo,
+        tipo: labelCobrancaTipo(initial.tipo) === '—' ? TIPO_PADRAO : labelCobrancaTipo(initial.tipo),
+        parcelas: '1',
       });
     } else {
       setValues(emptyValues());
@@ -79,12 +96,28 @@ export function CobrancaForm({ open, initial, onClose, onSave }: Props) {
     [pessoas],
   );
 
+  const tipoOptions = useMemo((): SearchableSelectOption[] => {
+    if (!values.tipo) return categorias;
+    if (categorias.some((o) => o.value === values.tipo)) return categorias;
+    return [{ value: values.tipo, label: values.tipo }, ...categorias];
+  }, [categorias, values.tipo]);
+
+  const parcelasNum = Math.max(1, Math.min(48, Number.parseInt(values.parcelas, 10) || 1));
+  const valorNum = parseValorInput(values.valor) ?? 0;
+  const valorParcelaHint =
+    !initial && parcelasNum > 1 && valorNum > 0
+      ? `≈ ${formatMoneyBRL(valorNum / parcelasNum)} por parcela`
+      : null;
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!values.pessoa_id || !values.data) return;
     setSaving(true);
     try {
-      await onSave(values);
+      await onSave({
+        ...values,
+        parcelas: String(parcelasNum),
+      });
       onClose();
     } finally {
       setSaving(false);
@@ -98,7 +131,7 @@ export function CobrancaForm({ open, initial, onClose, onSave }: Props) {
       <div className="dash-panel-backdrop" onClick={onClose} aria-hidden />
       <aside className="dash-panel-slide" role="dialog" aria-labelledby="cobranca-form-title">
         <div className="dash-panel-slide__inner">
-          <h2 id="cobranca-form-title">{initial ? 'Editar obrigação' : 'Nova obrigação'}</h2>
+          <h2 id="cobranca-form-title">{initial ? 'Editar cobrança' : 'Nova cobrança'}</h2>
           <form className="dash-member-form" onSubmit={(e) => void submit(e)}>
             <label className="dash-field">
               <span>Membro</span>
@@ -115,17 +148,18 @@ export function CobrancaForm({ open, initial, onClose, onSave }: Props) {
             </label>
 
             <label className="dash-field">
-              <span>Tipo</span>
+              <span>Categoria do fluxo</span>
               <SearchableSelect
-                options={TIPO_OPTIONS}
+                options={tipoOptions}
                 value={values.tipo}
-                onChange={(v) => setValues((prev) => ({ ...prev, tipo: v as CobrancaTipo }))}
-                aria-label="Tipo de cobrança"
+                onChange={(v) => setValues((prev) => ({ ...prev, tipo: v }))}
+                searchPlaceholder="Buscar categoria…"
+                aria-label="Categoria do fluxo de caixa"
               />
             </label>
 
             <label className="dash-field">
-              <span>Data vencimento</span>
+              <span>Data vencimento{!initial && parcelasNum > 1 ? ' (1ª parcela)' : ''}</span>
               <input
                 type="date"
                 required
@@ -141,9 +175,29 @@ export function CobrancaForm({ open, initial, onClose, onSave }: Props) {
                 required
                 value={values.valor}
                 onChange={(e) => setValues((v) => ({ ...v, valor: sanitizeValorInput(e.target.value) }))}
-                placeholder="0,00"
+                placeholder="R$ 0,00"
               />
             </label>
+
+            {!initial && (
+              <label className="dash-field">
+                <span>Parcelas</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={48}
+                  step={1}
+                  value={values.parcelas}
+                  onChange={(e) => setValues((v) => ({ ...v, parcelas: e.target.value.replace(/\D/g, '') || '1' }))}
+                  aria-label="Número de parcelas"
+                />
+                <span className="dash-hint">
+                  {parcelasNum > 1
+                    ? `Cria ${parcelasNum} cobranças mensais.${valorParcelaHint ? ` ${valorParcelaHint}` : ''}`
+                    : '1 = cobrança única. Acima de 1 divide o valor em vencimentos mensais.'}
+                </span>
+              </label>
+            )}
 
             <label className="dash-field dash-field--full">
               <span>Descrição</span>

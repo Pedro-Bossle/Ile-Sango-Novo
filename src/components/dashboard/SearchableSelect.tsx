@@ -7,6 +7,7 @@ import {
   useState,
   type KeyboardEvent,
 } from 'react';
+import { matchesSearch } from '../../utils/searchFold';
 
 export type SearchableSelectOption = {
   value: string;
@@ -60,9 +61,9 @@ export function SearchableSelect({
   );
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = query.trim();
     if (!q) return options;
-    return options.filter((o) => o.label.toLowerCase().includes(q));
+    return options.filter((o) => matchesSearch(o.label, q));
   }, [options, query]);
 
   const close = useCallback(() => {

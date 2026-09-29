@@ -62,11 +62,19 @@ function textoLocal(value) {
   return String(value).trim();
 }
 
+function mapsUrl(endereco) {
+  const q = textoLocal(endereco);
+  if (!q || q === 'Endereço a definir') return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
 export default function EventCard({ evento }) {
   const iconeSrc = resolverIconeEvento(evento);
   const fallbackIcon = EVENT_TYPE_ICONS_FALLBACK[evento?.tipo] || EVENT_TYPE_ICONS_FALLBACK.umbanda;
   const iconCandidates = iconCandidatesByTipo(evento?.tipo);
   const dataIso = evento.data ? String(evento.data).slice(0, 10) : undefined;
+  const endereco = textoLocal(evento.local);
+  const mapsHref = mapsUrl(evento.local);
 
   return (
     <article className="event-card-compact">
@@ -108,9 +116,19 @@ export default function EventCard({ evento }) {
           </li>
           <li className="event-card-compact__meta-item">
             <span className="event-card-compact__meta-key">Endereço</span>
-            <span className="event-card-compact__meta-val event-card-compact__meta-val--address">
-              {textoLocal(evento.local)}
-            </span>
+            {mapsHref ? (
+              <a
+                className="event-card-compact__meta-val event-card-compact__meta-val--address event-card-compact__meta-val--maps"
+                href={mapsHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Abrir no Google Maps"
+              >
+                {endereco}
+              </a>
+            ) : (
+              <span className="event-card-compact__meta-val event-card-compact__meta-val--address">{endereco}</span>
+            )}
           </li>
         </ul>
       </footer>

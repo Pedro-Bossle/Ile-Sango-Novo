@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { fetchConfigIle, saveConfigIle, type ConfigIle } from '../../../services/configIle';
+import {
+  cadastroPublicUrl,
+  fetchActiveCadastroLink,
+  getOrCreateCadastroLink,
+  maskCadastroToken,
+  regenerateCadastroLink,
+  type CadastroLink,
+} from '../../../services/membroCadastro';
 import { fetchCepBrasilApi } from '../../../utils/brasilApiCep';
 import {
   formatarPixMascara,
@@ -14,6 +22,8 @@ import {
 import { writeAuditLog, buildAuditDiff } from '../../../services/auditLog';
 import { SearchableSelect, type SearchableSelectOption } from '../SearchableSelect';
 import { Toast } from '../Toast';
+import { useConfirmAction } from '../ConfirmActionModal';
+import { parseValorInput, sanitizeValorInput, valorToMaskedInput } from '../../../utils/money';
 
 const PIX_TIPO_OPTIONS: SearchableSelectOption[] = PIX_KEY_TIPOS.map((t) => ({
   value: t.value,
@@ -45,6 +55,10 @@ export function DadosIleScreen({ canEdit }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ msg: string; variant: 'success' | 'error' } | null>(null);
+  const [cadastroLink, setCadastroLink] = useState<CadastroLink | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [mensalidadeMask, setMensalidadeMask] = useState('');
+  const { ask: askConfirm, modal: confirmModal } = useConfirmAction();
 
   useEffect(() => {
     fetchConfigIle()
@@ -53,10 +67,68 @@ export function DadosIleScreen({ canEdit }: Props) {
         const next = { ...data, chave_pix_tipo: tipo };
         setForm(next);
         setBaseline(next);
+        setMensalidadeMask(valorToMaskedInput(data.mensalidade_valor ?? 20));
       })
       .catch((e) => setToast({ msg: e.message, variant: 'error' }))
       .finally(() => setLoading(false));
+
+    fetchActiveCadastroLink()
+      .then(setCadastroLink)
+      .catch(() => setCadastroLink(null));
   }, []);
+
+  const linkUrl = cadastroLink ? cadastroPublicUrl() : '';
+  const tokenMascarado = cadastroLink ? maskCadastroToken(cadastroLink.token) : '';
+
+  const gerarOuGarantirLink = async () => {
+    if (!canEdit) return;
+    setLinkBusy(true);
+    try {
+      const link = await getOrCreateCadastroLink();
+      setCadastroLink(link);
+      setToast({ msg: 'Link de cadastro pronto.', variant: 'success' });
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Erro ao gerar link.', variant: 'error' });
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const regenerarLink = async () => {
+    if (!canEdit) return;
+    const ok = await askConfirm({
+      title: 'Regenerar link',
+      message: 'Regenerar invalida o link atual. Continuar?',
+      confirmLabel: 'Regenerar',
+      confirmingLabel: 'Gerando…',
+    });
+    if (!ok) return;
+    setLinkBusy(true);
+    try {
+      const link = await regenerateCadastroLink();
+      setCadastroLink(link);
+      try {
+        await navigator.clipboard.writeText(cadastroPublicUrl());
+        setToast({ msg: 'Novo link gerado e copiado.', variant: 'success' });
+      } catch {
+        setToast({ msg: 'Novo link gerado.', variant: 'success' });
+      }
+    } catch (e) {
+      setToast({ msg: e instanceof Error ? e.message : 'Erro ao regenerar link.', variant: 'error' });
+    } finally {
+      setLinkBusy(false);
+    }
+  };
+
+  const copiarLink = async () => {
+    if (!linkUrl) return;
+    try {
+      await navigator.clipboard.writeText(linkUrl);
+      setToast({ msg: 'Link copiado.', variant: 'success' });
+    } catch {
+      setToast({ msg: 'Não foi possível copiar.', variant: 'error' });
+    }
+  };
 
   const pixTipo: PixKeyTipo = isPixTipo(form.chave_pix_tipo) ? form.chave_pix_tipo : 'cpf';
 
@@ -180,6 +252,7 @@ export function DadosIleScreen({ canEdit }: Props) {
   return (
     <div className="dash-config-ile" data-tour="dados-ile">
       <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
+      {confirmModal}
       <header className="dash-page-head">
         <div className="dash-page-head__titles">
           <h1>Dados do Ilê</h1>
@@ -255,19 +328,20 @@ export function DadosIleScreen({ canEdit }: Props) {
           <p className="dash-field-hint">Usada nas cobranças por WhatsApp e no recibo de atendimento</p>
 
           <label className="dash-field" style={{ marginTop: '0.75rem' }}>
-            <span>Valor padrão da mensalidade (R$)</span>
+            <span>Valor padrão da mensalidade</span>
             <input
-              type="number"
-              min={0}
-              step={0.01}
-              value={form.mensalidade_valor ?? 20}
+              inputMode="decimal"
+              value={mensalidadeMask}
               disabled={!canEdit}
-              onChange={(e) =>
+              placeholder="R$ 0,00"
+              onChange={(e) => {
+                const masked = sanitizeValorInput(e.target.value);
+                setMensalidadeMask(masked);
                 setForm({
                   ...form,
-                  mensalidade_valor: e.target.value === '' ? null : Number(e.target.value),
-                })
-              }
+                  mensalidade_valor: parseValorInput(masked),
+                });
+              }}
             />
             <p className="dash-field-hint">Usado na grade anual de Mensalidades</p>
           </label>
@@ -376,6 +450,50 @@ export function DadosIleScreen({ canEdit }: Props) {
           </div>
         )}
       </form>
+
+      <section className="dash-form-section" data-tour="dados-ile-cadastro-link" style={{ marginTop: '1.5rem' }}>
+        <h2 className="dash-form-section__title">Link de cadastro de membros</h2>
+        <p className="dash-muted" style={{ marginBottom: '0.75rem' }}>
+          Envie este link para o membro preencher a ficha completa. As submissões aparecem no inbox da dashboard.
+        </p>
+        {linkUrl ? (
+          <>
+            <label className="dash-field">
+              <span>URL pública</span>
+              <input type="text" readOnly value={linkUrl} onFocus={(e) => e.target.select()} />
+            </label>
+            <p className="dash-field-hint">
+              Token interno (mascarado): <code>{tokenMascarado}</code> — não aparece na URL enviada aos membros.
+            </p>
+          </>
+        ) : (
+          <p className="dash-muted">Nenhum link ativo. Gere um para começar.</p>
+        )}
+        <div className="dash-form-actions" style={{ marginTop: '0.75rem', gap: '0.5rem', display: 'flex', flexWrap: 'wrap' }}>
+          {!cadastroLink && canEdit && (
+            <button type="button" className="dash-btn-primary" disabled={linkBusy} onClick={() => void gerarOuGarantirLink()}>
+              {linkBusy ? 'Gerando…' : 'Gerar link'}
+            </button>
+          )}
+          {cadastroLink && (
+            <>
+              <button type="button" className="dash-btn-primary" onClick={() => void copiarLink()}>
+                Copiar link
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  className="dash-add-button dash-add-button--secondary"
+                  disabled={linkBusy}
+                  onClick={() => void regenerarLink()}
+                >
+                  {linkBusy ? 'Regenerando…' : 'Regenerar'}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
