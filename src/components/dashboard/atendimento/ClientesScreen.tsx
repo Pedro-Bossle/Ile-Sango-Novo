@@ -507,6 +507,7 @@ export function ClientesScreen({
     return (
       <div className="dash-clientes" data-tour="atendimento-clientes">
         <Toast message={toast?.msg ?? null} variant={toast?.variant} onDismiss={() => setToast(null)} />
+        {confirmModal}
 
         <div className="dash-split-main__bar dash-clientes__detail-bar">
           <button type="button" className="dash-btn-secondary dash-clientes__voltar" onClick={backToList}>

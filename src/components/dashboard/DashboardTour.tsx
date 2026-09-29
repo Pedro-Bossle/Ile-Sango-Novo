@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EVENTS, Joyride, STATUS, type EventHandler, type Step } from 'react-joyride';
 import {
   clearTutorialCompleted,
@@ -500,33 +500,62 @@ export function DashboardTour({
   const [activeScreen, setActiveScreen] = useState(menuAtivo);
   const [readyAuto, setReadyAuto] = useState(false);
 
+  const menuAtivoRef = useRef(menuAtivo);
+  const startTimerRef = useRef<number | null>(null);
+  const autoTriedRef = useRef(false);
+  const lastRestartNonceRef = useRef(0);
+  const endingRef = useRef(false);
+  const activeScreenRef = useRef(activeScreen);
+  const onPrepareStartRef = useRef(onPrepareStart);
+  const onSidebarOpenRef = useRef(onSidebarOpen);
+
+  menuAtivoRef.current = menuAtivo;
+  activeScreenRef.current = activeScreen;
+  onPrepareStartRef.current = onPrepareStart;
+  onSidebarOpenRef.current = onSidebarOpen;
+
   const openSidebar = useCallback(async () => {
-    onSidebarOpen(true);
+    onSidebarOpenRef.current(true);
     await wait(isMobileViewport() ? 320 : 200);
-  }, [onSidebarOpen]);
+  }, []);
 
   const closeSidebar = useCallback(async () => {
-    onSidebarOpen(false);
+    onSidebarOpenRef.current(false);
     await wait(isMobileViewport() ? 280 : 120);
-  }, [onSidebarOpen]);
+  }, []);
 
   const steps = useMemo(
     () => buildStepsForScreen(activeScreen, { openSidebar, closeSidebar }),
     [activeScreen, openSidebar, closeSidebar],
   );
 
+  const stopTour = useCallback(() => {
+    if (startTimerRef.current != null) {
+      window.clearTimeout(startTimerRef.current);
+      startTimerRef.current = null;
+    }
+    setRun(false);
+  }, []);
+
   const startTour = useCallback(
     (screen: string) => {
       if (!userId) return;
+      endingRef.current = false;
       setActiveScreen(screen);
-      onPrepareStart();
+      onPrepareStartRef.current();
+      if (startTimerRef.current != null) {
+        window.clearTimeout(startTimerRef.current);
+      }
       setRun(false);
-      window.setTimeout(() => setRun(true), 400);
+      startTimerRef.current = window.setTimeout(() => {
+        startTimerRef.current = null;
+        setRun(true);
+      }, 400);
     },
-    [onPrepareStart, userId],
+    [userId],
   );
 
-  // Auto: uma vez por utilizador alvo, se ainda não concluído no banco.
+  // Auto: só uma vez por sessão, e só na Visão geral do utilizador alvo.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -539,9 +568,14 @@ export function DashboardTour({
         setReadyAuto(true);
         return;
       }
+      if (autoTriedRef.current) {
+        setReadyAuto(true);
+        return;
+      }
       try {
         const done = await isTutorialCompleted(userId, 'visao-geral');
         if (cancelled) return;
+        autoTriedRef.current = true;
         setReadyAuto(true);
         if (!done) startTour('visao-geral');
       } catch {
@@ -553,33 +587,52 @@ export function DashboardTour({
     };
   }, [userId, menuAtivo, startTour]);
 
-  // Manual: botão da sidebar.
+  // Manual: só reage a um novo clique em “Tutorial”, com a tela do momento do clique.
   useEffect(() => {
     if (!restartNonce || !userId) return;
+    if (restartNonce === lastRestartNonceRef.current) return;
+
+    const screen = menuAtivoRef.current;
     let cancelled = false;
     (async () => {
       try {
-        await clearTutorialCompleted(userId, menuAtivo);
+        await clearTutorialCompleted(userId, screen);
       } catch {
         /* segue mesmo se falhar limpeza */
       }
-      if (!cancelled) startTour(menuAtivo);
+      if (cancelled) return;
+      lastRestartNonceRef.current = restartNonce;
+      startTour(screen);
     })();
     return () => {
       cancelled = true;
     };
-  }, [restartNonce, userId, menuAtivo, startTour]);
+  }, [restartNonce, userId, startTour]);
 
   const handleEvent = useCallback<EventHandler>(
     (data) => {
       if (!userId) return;
-      if (data.type === EVENTS.TOUR_END || data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
-        void markTutorialCompleted(userId, activeScreen).catch(() => undefined);
-        setRun(false);
-        onSidebarOpen(false);
+      const ended =
+        data.type === EVENTS.TOUR_END ||
+        data.status === STATUS.FINISHED ||
+        data.status === STATUS.SKIPPED;
+      if (!ended || endingRef.current) return;
+      endingRef.current = true;
+      const screen = activeScreenRef.current;
+      void markTutorialCompleted(userId, screen).catch(() => undefined);
+      stopTour();
+      onSidebarOpenRef.current(false);
+    },
+    [userId, stopTour],
+  );
+
+  useEffect(
+    () => () => {
+      if (startTimerRef.current != null) {
+        window.clearTimeout(startTimerRef.current);
       }
     },
-    [userId, activeScreen, onSidebarOpen],
+    [],
   );
 
   if (!userId || (!readyAuto && !restartNonce)) return null;
@@ -610,7 +663,7 @@ export function DashboardTour({
         closeButtonAction: 'skip',
         spotlightPadding: 8,
         spotlightRadius: 10,
-        width: isMobileViewport() ? 'min(340px, 92vw)' : 380,
+        width: isMobileViewport() ? 'min(340px, 92%)' : 380,
       }}
     />
   );
