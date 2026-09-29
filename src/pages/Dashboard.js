@@ -1076,13 +1076,7 @@ const Dashboard = () => {
           <>
             <header className="dash-page-head dash-visao-head">
               <div className="dash-page-head__titles">
-                <h1>
-                  Visão Geral
-                  <span className="dash-live-badge" title="Atualiza automaticamente">
-                    <span className="dash-live-badge__dot" aria-hidden />
-                    LIVE
-                  </span>
-                </h1>
+                <h1>Visão Geral</h1>
               </div>
               {pode('membros', 'r') && (
                 <div className="dash-page-head__actions">
