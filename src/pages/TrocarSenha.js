@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import {
   isPasswordChangeRequired,
   markPasswordChangeCompleted,
+  rememberPasswordChangedLocally,
 } from '../services/passwordChangeRequired.ts';
 import './Auth.css';
 
@@ -61,6 +62,7 @@ const TrocarSenha = () => {
       } catch {
         if (mounted) {
           setError('Nao foi possivel verificar a exigencia de troca de senha.');
+          setUserId(session.user.id);
           setChecking(false);
         }
       }
@@ -103,17 +105,17 @@ const TrocarSenha = () => {
       return;
     }
 
+    rememberPasswordChangedLocally(userId);
+
     try {
       await markPasswordChangeCompleted(userId);
-    } catch {
-      setError('Senha atualizada, mas nao foi possivel concluir o registro. Tente entrar novamente.');
-      setLoading(false);
-      return;
+    } catch (markErr) {
+      // A senha já foi atualizada. O flag local evita loop se o update na BD falhar.
+      console.error('markPasswordChangeCompleted failed:', markErr);
     }
 
     setMessage('Senha atualizada com sucesso. Abrindo a dashboard...');
     setLoading(false);
-    // Depois da troca: dashboard (e tutorial automático, se ainda pendente).
     navigate('/dashboard', { replace: true });
   };
 

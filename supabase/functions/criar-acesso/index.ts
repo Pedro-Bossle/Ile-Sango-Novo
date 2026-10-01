@@ -216,11 +216,18 @@ Deno.serve(async (req) => {
       return json(500, { error: upsertErr.message });
     }
 
-    await admin.from('password_change_required').upsert({
-      user_id: userId,
-      required_at: new Date().toISOString(),
-      completed_at: null,
-    });
+    const { error: pwdReqErr } = await admin.from('password_change_required').upsert(
+      {
+        user_id: userId,
+        required_at: new Date().toISOString(),
+        completed_at: null,
+      },
+      { onConflict: 'user_id' },
+    );
+    if (pwdReqErr) {
+      // Acesso criado, mas sem flag de troca obrigatória — ainda devolve sucesso com aviso.
+      console.error('password_change_required upsert failed:', pwdReqErr.message);
+    }
 
     const loginUrl = `${siteUrl}/login`;
     const subject = 'Acesso à área restrita do Ilê';

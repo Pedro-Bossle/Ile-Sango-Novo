@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { markPasswordChangeCompleted, rememberPasswordChangedLocally } from '../services/passwordChangeRequired.ts';
 import './Auth.css';
 
 function getMensagemErroAuth(errorMessage) {
@@ -20,6 +21,14 @@ function getMensagemErroAuth(errorMessage) {
   }
 
   return 'Nao foi possivel atualizar a senha agora. Tente novamente em instantes.';
+}
+
+function limparParamsAuthDaUrl() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('code');
+  url.searchParams.delete('type');
+  url.hash = '';
+  window.history.replaceState({}, document.title, `${url.pathname}${url.search}`);
 }
 
 const RedefinirSenha = () => {
@@ -44,12 +53,12 @@ const RedefinirSenha = () => {
       const queryType = currentUrl.searchParams.get('type');
       const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
       const hashType = hashParams.get('type');
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
       const flowType = queryType || hashType || '';
-      const isAllowedAuthFlow = flowType === 'recovery' || flowType === 'invite';
-      const hasExplicitDisallowedType = Boolean(flowType) && !isAllowedAuthFlow;
-      const hasRecoveryLikeSignal = Boolean(code) || isAllowedAuthFlow;
+      const hasExplicitDisallowedType = Boolean(flowType) && flowType !== 'recovery' && flowType !== 'invite';
 
-      if (hasExplicitDisallowedType || !hasRecoveryLikeSignal) {
+      if (hasExplicitDisallowedType) {
         if (mounted) {
           setError('Link de redefinicao invalido ou expirado. Solicite outro email.');
           setReady(false);
@@ -66,8 +75,22 @@ const RedefinirSenha = () => {
           }
           return;
         }
+      } else if (accessToken && refreshToken) {
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        if (sessionError) {
+          if (mounted) {
+            setError('Link de redefinicao invalido ou expirado. Solicite outro email.');
+            setReady(false);
+          }
+          return;
+        }
       }
 
+      // O cliente Supabase pode ter consumido o hash antes deste efeito correr.
+      // Nesse caso ainda há sessão válida mesmo sem type/code na URL.
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         if (mounted) {
@@ -76,6 +99,8 @@ const RedefinirSenha = () => {
         }
         return;
       }
+
+      limparParamsAuthDaUrl();
 
       if (mounted) {
         setAuthFlowType(flowType === 'invite' ? 'invite' : 'recovery');
@@ -110,6 +135,9 @@ const RedefinirSenha = () => {
 
     setLoading(true);
 
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id ?? null;
+
     const { error: updateError } = await supabase.auth.updateUser({
       password: novaSenha,
     });
@@ -118,6 +146,15 @@ const RedefinirSenha = () => {
       setError(getMensagemErroAuth(updateError.message));
       setLoading(false);
       return;
+    }
+
+    if (userId) {
+      rememberPasswordChangedLocally(userId);
+      try {
+        await markPasswordChangeCompleted(userId);
+      } catch {
+        /* a senha já foi atualizada; o flag local evita bloqueio no próximo login */
+      }
     }
 
     setMessage(
@@ -181,7 +218,7 @@ const RedefinirSenha = () => {
           </button>
         </div>
 
-        <button className="auth-button" type="submit" disabled={loading}>
+        <button className="auth-button" type="submit" disabled={loading || !ready}>
           {loading ? 'Salvando...' : authFlowType === 'invite' ? 'Cadastrar senha' : 'Atualizar senha'}
         </button>
 
